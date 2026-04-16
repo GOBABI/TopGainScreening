@@ -985,16 +985,27 @@ def send_telegram_pdf(passed, mkt):
     if not passed:
         caption += "조건에 맞는 종목 없음\n"
     caption += "투자 책임은 본인에게 있습니다"
+    caption = caption[:1024]  # 텔레그램 caption 1024자 제한
 
-    with open(PDF_OUT, 'rb') as f:
-        r = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
-            data={'chat_id': CHAT_ID, 'caption': caption},
-            files={'document': (f'US_Screening_{TODAY}.pdf', f, 'application/pdf')},
-            timeout=30
-        ).json()
-    if not r.get('ok'):
-        raise RuntimeError(f"텔레그램 PDF 오류: {r.get('description')}")
+    import time
+    for attempt in range(3):
+        try:
+            with open(PDF_OUT, 'rb') as f:
+                r = requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
+                    data={'chat_id': CHAT_ID, 'caption': caption},
+                    files={'document': (f'US_Screening_{TODAY}.pdf', f, 'application/pdf')},
+                    timeout=60
+                )
+            if r.ok and r.json().get('ok'):
+                log("텔레그램 PDF 전송 완료")
+                return
+            else:
+                log(f"텔레그램 PDF 재시도 {attempt+1}: {r.text[:100]}")
+        except Exception as e:
+            log(f"텔레그램 PDF 재시도 {attempt+1}: {e}")
+        time.sleep(5)
+    raise RuntimeError("텔레그램 PDF 3회 실패")
     log("텔레그램 PDF 전송 완료")
 
 # ── 내러티브 생성 및 전송 ─────────────────────────────────────────────
@@ -1073,14 +1084,23 @@ def build_narrative(passed, mkt):
     return "\n".join(lines)
 
 def send_telegram_narrative(text):
-    r = requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        data={'chat_id': CHAT_ID, 'text': text},
-        timeout=15
-    ).json()
-    if not r.get('ok'):
-        raise RuntimeError(f"텔레그램 메시지 오류: {r.get('description')}")
-    log("텔레그램 내러티브 전송 완료")
+    import time
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={'chat_id': CHAT_ID, 'text': text},
+                timeout=30
+            )
+            if r.ok and r.json().get('ok'):
+                log("텔레그램 내러티브 전송 완료")
+                return
+            else:
+                log(f"텔레그램 메시지 재시도 {attempt+1}: {r.text[:100]}")
+        except Exception as e:
+            log(f"텔레그램 메시지 재시도 {attempt+1}: {e}")
+        time.sleep(5)
+    raise RuntimeError("텔레그램 메시지 3회 실패")
 
 # ── 메인 ─────────────────────────────────────────────────────────────
 def main():
