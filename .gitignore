@@ -1,0 +1,12 @@
+# 생성 결과물
+screening_result.json
+us_market_screening_latest.pdf
+pre_result.json
+
+# Pretendard OTF (TTF 사용)
+Pretendard-*.otf
+
+# 기타
+__pycache__/
+*.pyc
+.DS_Store

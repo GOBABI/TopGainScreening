@@ -10,14 +10,14 @@ warnings.filterwarnings('ignore')
 
 # ── 경로 설정 (환경에 관계없이 고정) ──────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FONT_R   = os.path.join(BASE_DIR, 'Pretendard-Regular.ttf')
-FONT_B   = os.path.join(BASE_DIR, 'Pretendard-Bold.ttf')
-FONT_SB  = os.path.join(BASE_DIR, 'Pretendard-SemiBold.ttf')
+FONT_R   = os.path.join(BASE_DIR, 'PretendardVariable.ttf')
+FONT_B   = os.path.join(BASE_DIR, 'PretendardVariable.ttf')
+FONT_SB  = os.path.join(BASE_DIR, 'PretendardVariable.ttf')
 PDF_OUT       = os.path.join(BASE_DIR, 'us_market_screening_latest.pdf')
 JSON_OUT      = os.path.join(BASE_DIR, 'screening_result.json')
 WATCHLIST_FILE = os.path.join(BASE_DIR, 'watchlist.json')
 
-BOT_TOKEN  = "8654658267:AAEWsIE8MbM-V_9mR77LIymdfsb_cEDFJug"
+BOT_TOKEN  = "8702268897:AAEhRnt0nuBnYCJeMdhofbX_h-D_YBTJxCE"
 CHAT_ID    = "7371637453"
 TODAY      = datetime.now().strftime('%Y-%m-%d')
 
@@ -499,16 +499,22 @@ def build_pdf(passed, mkt, wl=None):
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
-    # Pretendard 폰트 없으면 시스템 폰트(DejaVu)로 대체
+    # Pretendard 폰트 없으면 시스템 폰트로 대체 (macOS Arial → Linux DejaVu)
     _font_paths = [
-        (FONT_R, '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
-        (FONT_B, '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
-        (FONT_SB, '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+        (FONT_R,  ['/System/Library/Fonts/Supplemental/Arial.ttf',
+                   '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']),
+        (FONT_B,  ['/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+                   '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']),
+        (FONT_SB, ['/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+                   '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']),
     ]
-    for custom, fallback in _font_paths:
-        if not os.path.exists(custom) and os.path.exists(fallback):
+    for custom, fallbacks in _font_paths:
+        if not os.path.exists(custom):
             import shutil
-            shutil.copy(fallback, custom)
+            for fallback in fallbacks:
+                if os.path.exists(fallback):
+                    shutil.copy(fallback, custom)
+                    break
     pdfmetrics.registerFont(TTFont('PT',   FONT_R))
     pdfmetrics.registerFont(TTFont('PTB',  FONT_B))
     pdfmetrics.registerFont(TTFont('PTSB', FONT_SB))
