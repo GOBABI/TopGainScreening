@@ -143,6 +143,66 @@
       "last_ql_desc": "일반 상승 구간",
       "name": "Redwire Corporation",
       "sector": "Industrials"
+    },
+    "USAR": {
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "appearances": 1,
+      "last_price": 20.56,
+      "last_change_pct": 11.56,
+      "last_score": 2,
+      "last_ql_pos": "b",
+      "last_ql_desc": "1~3개월 조정 후 재돌파 구간 (선호)",
+      "name": "USA Rare Earth, Inc.",
+      "sector": "Basic Materials"
+    },
+    "UAL": {
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "appearances": 1,
+      "last_price": 105.0,
+      "last_change_pct": 10.49,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "last_ql_desc": "일반 상승 구간",
+      "name": "United Airlines Holdings, Inc.",
+      "sector": "Industrials"
+    },
+    "JHX": {
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "appearances": 1,
+      "last_price": 22.09,
+      "last_change_pct": 10.01,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "last_ql_desc": "일반 상승 구간",
+      "name": "James Hardie Industries plc.",
+      "sector": "Basic Materials"
+    },
+    "HYMC": {
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "appearances": 1,
+      "last_price": 45.23,
+      "last_change_pct": 11.08,
+      "last_score": 1,
+      "last_ql_pos": "b",
+      "last_ql_desc": "1~3개월 조정 후 재돌파 구간 (선호)",
+      "name": "Hycroft Mining Holding Corporat",
+      "sector": "Basic Materials"
+    },
+    "YETI": {
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "appearances": 1,
+      "last_price": 42.36,
+      "last_change_pct": 10.34,
+      "last_score": 0,
+      "last_ql_pos": "c",
+      "last_ql_desc": "일반 상승 구간",
+      "name": "YETI Holdings, Inc.",
+      "sector": "Consumer Cyclical"
     }
   }
 }
