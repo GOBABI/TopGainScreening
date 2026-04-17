@@ -1,0 +1,113 @@
+{
+  "date": "2026-04-17",
+  "market": {
+    "spy": {},
+    "qqq": {},
+    "vix": {},
+    "smh": {},
+    "xlk": {},
+    "xlv": {},
+    "xle": {},
+    "xli": {}
+  },
+  "passed": [],
+  "passed_count": 0,
+  "watchlist": {
+    "FSLY": {
+      "first_seen": "2026-04-15",
+      "days": 2,
+      "appearances": 1,
+      "last_score": 6,
+      "last_ql_pos": "b",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "MLYS": {
+      "first_seen": "2026-04-15",
+      "days": 2,
+      "appearances": 1,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "AXTI": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 7,
+      "last_score": 7,
+      "last_ql_pos": "a",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "PL": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 7,
+      "last_score": 9,
+      "last_ql_pos": "a",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "NN": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 7,
+      "last_score": 6,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "DOCN": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 6,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "NVTS": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 3,
+      "last_score": 3,
+      "last_ql_pos": "b",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "RKLB": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 3,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "ALB": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 2,
+      "last_score": 2,
+      "last_ql_pos": "a",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "LUNR": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 1,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "AAOI": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 1,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "RDW": {
+      "first_seen": "2026-04-16",
+      "days": 1,
+      "appearances": 1,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    }
+  }
+}
