@@ -183,12 +183,16 @@ def scan_premarket(chat_id):
             return None
 
     def _fetch_detail(sym):
-        news, url, sector = "", "", ""
+        news, url, sector, cur, pre_vol_ratio = "", "", "", 0.0, 0.0
         c1, c5 = None, None
         try:
             t = yf.Ticker(sym)
             info = t.info
-            sector = info.get("sector", "") or ""
+            sector  = info.get("sector", "") or ""
+            cur     = float(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("preMarketPrice") or 0)
+            pre_vol = float(info.get("preMarketVolume") or 0)
+            avg_vol = float(info.get("averageDailyVolume3Month") or 1)
+            pre_vol_ratio = pre_vol / avg_vol if avg_vol else 0.0
             for n in (t.news or [])[:3]:
                 title = (n.get("content", {}).get("title") or n.get("title", ""))
                 link  = (n.get("content", {}).get("canonicalUrl", {}).get("url", "")
@@ -202,7 +206,17 @@ def scan_premarket(chat_id):
             c1 = _get_first_candle(sym, 1)
         if _has_5m:
             c5 = _get_first_candle(sym, 5)
-        return news, url, sector, c1, c5
+        return news, url, sector, cur, pre_vol_ratio, c1, c5
+
+    # 저장된 프리마켓 거래량 비율 로드 (정규장 중 참조)
+    _saved_vr = {}
+    try:
+        with open(PRE_RESULT_FILE) as f:
+            _pf = json.load(f)
+        if _pf.get("date") == str(_today):
+            _saved_vr = _pf.get("vol_ratios", {})
+    except Exception:
+        pass
 
     from concurrent.futures import ThreadPoolExecutor
     syms = [r["sym"] for r in results]
@@ -213,29 +227,49 @@ def scan_premarket(chat_id):
     if regular_open:
         header += "\n<i>(정규장 시작 후 — 오늘 시가 기준)</i>"
     lines = [header + "\n"]
+    def _range_pct(cur, low, high):
+        rng = high - low
+        if rng <= 0:
+            return None
+        return (cur - low) / rng * 100
+
     for r in results:
-        news, url, sector, c1, c5 = details.get(r["sym"], ("", "", "", None, None))
-        vol_tag    = f"  🔥 {r['vol_ratio']:.1f}x" if r["vol_ratio"] >= 2 else ""
+        news, url, sector, cur, pre_vol_ratio, c1, c5 = details.get(r["sym"], ("", "", "", 0.0, 0.0, None, None))
+        vol_ratio  = pre_vol_ratio if pre_vol_ratio > 0 else _saved_vr.get(r["sym"], r["vol_ratio"])
+        vol_tag    = f"  🔥 {vol_ratio:.1f}x" if vol_ratio >= 2 else ""
         sector_tag = f"\n  🏷 {sector}" if sector else ""
         news_tag   = f"\n  📰 <a href='{url}'>{news}</a>" if news and url else (f"\n  📰 {news}" if news else "")
 
         candle_tag = ""
         if regular_open:
             if c1:
-                candle_tag += f"\n  🕯1분봉  고 ${c1['high']:.2f} / 저 ${c1['low']:.2f}"
+                pos = _range_pct(cur, c1["low"], c1["high"]) if cur else None
+                pos_str = f"  📍{pos:.0f}%" if pos is not None else ""
+                candle_tag += f"\n  🕯1분봉  고 ${c1['high']:.2f} / 저 ${c1['low']:.2f}{pos_str}"
             elif _hm < 931:
                 candle_tag += "\n  🕯1분봉  아직 미완성 (9:31 ET 이후)"
             if c5:
-                candle_tag += f"\n  🕯5분봉  고 ${c5['high']:.2f} / 저 ${c5['low']:.2f}"
+                pos = _range_pct(cur, c5["low"], c5["high"]) if cur else None
+                pos_str = f"  📍{pos:.0f}%" if pos is not None else ""
+                candle_tag += f"\n  🕯5분봉  고 ${c5['high']:.2f} / 저 ${c5['low']:.2f}{pos_str}"
             elif _hm < 935:
                 candle_tag += "\n  🕯5분봉  아직 미완성 (9:35 ET 이후)"
 
+        cur_tag = f"  현재 ${cur:.2f}" if cur else ""
         lines.append(
             f"<b>{r['sym']}</b> ({r['name']})\n"
-            f"  갭 +{r['gap']:.1f}%  |  ${r['price']:.2f}{vol_tag}{sector_tag}{candle_tag}{news_tag}"
+            f"  갭 +{r['gap']:.1f}%{cur_tag}{vol_tag}{sector_tag}{candle_tag}{news_tag}"
         )
 
     send_message(chat_id, "\n\n".join(lines))
+
+    # 프리마켓 거래량 비율 저장 (정규장 이후 참조용)
+    saved = {"date": str(_today), "symbols": [r["sym"] for r in results], "vol_ratios": {}}
+    for r in results:
+        vr = details.get(r["sym"], ("","","",0.0,0.0,None,None))[4]
+        saved["vol_ratios"][r["sym"]] = round(vr if vr > 0 else r["vol_ratio"], 2)
+    with open(PRE_RESULT_FILE, "w") as f:
+        json.dump(saved, f)
     print(f"[bot] /pre 완료 — {len(results)}개 종목 전송")
 
 
