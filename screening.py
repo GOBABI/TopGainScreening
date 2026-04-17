@@ -499,6 +499,16 @@ def build_pdf(passed, mkt, wl=None):
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
+    # Pretendard 폰트 없으면 시스템 폰트(DejaVu)로 대체
+    _font_paths = [
+        (FONT_R, '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
+        (FONT_B, '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+        (FONT_SB, '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+    ]
+    for custom, fallback in _font_paths:
+        if not os.path.exists(custom) and os.path.exists(fallback):
+            import shutil
+            shutil.copy(fallback, custom)
     pdfmetrics.registerFont(TTFont('PT',   FONT_R))
     pdfmetrics.registerFont(TTFont('PTB',  FONT_B))
     pdfmetrics.registerFont(TTFont('PTSB', FONT_SB))
