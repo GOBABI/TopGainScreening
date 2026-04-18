@@ -262,37 +262,49 @@ def analyze(ticker):
     ql_pos, ql_desc = qullamaggie_position(price, ma200v, high52, ytd)
 
     vol_trend = 'N/A'
+    vol_contraction = False
     if len(h) >= 20:
         avg_vol_20 = float(h['Volume'][-20:].mean())
         avg_vol_5  = float(h['Volume'][-5:].mean())
         vol_trend  = '증가' if avg_vol_5 > avg_vol_20 * 1.2 else ('감소' if avg_vol_5 < avg_vol_20 * 0.8 else '보합')
 
+        # 거래량 수축 체크: 20일을 4구간으로 나눠 최근으로 올수록 줄어드는지 확인
+        vols = h['Volume'][-20:].values
+        q1 = vols[:5].mean()    # 15~20일 전
+        q2 = vols[5:10].mean()  # 10~15일 전
+        q3 = vols[10:15].mean() # 5~10일 전
+        q4 = vols[15:].mean()   # 최근 5일
+        # 최근 5일이 이전보다 줄고 있거나, 20일 평균 대비 30% 이상 감소
+        vol_contraction = bool((q4 < q3 and q3 < q2) or (q4 < q1 * 0.7))
+
     return {
-        '200ma':       round(ma200v, 2),
-        'above_200ma': bool(price > ma200v),
-        'rsi':         round(rsi, 1),
-        'adx':         round(adx, 1),
-        'macd_bull':   bool(macd_bull),
-        '52w_pct':     pct52,
-        '52w_high':    round(high52, 2),
-        'ytd':         ytd,
-        'adr':         adr,
-        'ql_pos':      ql_pos,      # str: 'a' | 'b' | 'c'
-        'ql_desc':     ql_desc,     # str
-        'vol_trend':   vol_trend,
+        '200ma':          round(ma200v, 2),
+        'above_200ma':    bool(price > ma200v),
+        'rsi':            round(rsi, 1),
+        'adx':            round(adx, 1),
+        'macd_bull':      bool(macd_bull),
+        '52w_pct':        pct52,
+        '52w_high':       round(high52, 2),
+        'ytd':            ytd,
+        'adr':            adr,
+        'ql_pos':         ql_pos,
+        'ql_desc':        ql_desc,
+        'vol_trend':      vol_trend,
+        'vol_contraction': vol_contraction,
     }
 
 AI_SECTORS = {'technology','semiconductor','defense','energy','aerospace'}
 
 def score_stock(ta, sector, industry):
     s = 0
-    if ta['adx'] > 25:            s += 2
-    if 40 <= ta['rsi'] <= 75:     s += 2
-    if ta['macd_bull']:            s += 2
-    if ta['52w_pct'] >= 90:       s += 1
-    if ta['ytd'] >= 50:            s += 1
+    if ta['adx'] > 25:                          s += 2
+    if 40 <= ta['rsi'] <= 75:                   s += 2
+    if ta['macd_bull']:                          s += 2
+    if ta['52w_pct'] >= 90:                     s += 1
+    if ta['ytd'] >= 50:                          s += 1
+    if ta.get('vol_contraction') and ta['ql_pos'] == 'b':  s += 2  # VCP 조건 충족
     combo = (sector + industry).lower()
-    if any(k in combo for k in AI_SECTORS): s += 1
+    if any(k in combo for k in AI_SECTORS):     s += 1
     return s
 
 def auto_risks(ta, detail):
@@ -308,6 +320,8 @@ def auto_risks(ta, detail):
         risks.append("YTD 100%↑ 급등주 — 차익실현 매물 출회 주의")
     if not ta['macd_bull']:
         risks.append("MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장")
+    if ta['ql_pos'] == 'b' and not ta.get('vol_contraction'):
+        risks.append("b 구간이나 거래량 수축 미확인 — 베이스 품질 재점검 필요")
     beta = detail.get('beta') or 0
     if beta and beta > 2:
         risks.append(f"Beta {beta:.1f} — 시장 변동 시 과대 반응 가능")
