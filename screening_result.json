@@ -1,113 +1,375 @@
 {
-  "date": "2026-04-17",
+  "date": "2026-04-18",
   "market": {
-    "spy": {},
-    "qqq": {},
-    "vix": {},
-    "smh": {},
-    "xlk": {},
-    "xlv": {},
-    "xle": {},
-    "xli": {}
+    "spy": {
+      "price": 710.14,
+      "chg": 1.21,
+      "week": 3.5
+    },
+    "qqq": {
+      "price": 648.85,
+      "chg": 1.31,
+      "week": 5.1
+    },
+    "vix": {
+      "price": 17.48,
+      "chg": -2.56,
+      "week": -8.58
+    },
+    "smh": {
+      "price": 464.16,
+      "chg": 2.06,
+      "week": 4.7
+    },
+    "xlk": {
+      "price": 154.35,
+      "chg": 1.53,
+      "week": 6.0
+    },
+    "xlv": {
+      "price": 148.8,
+      "chg": 1.49,
+      "week": 0.56
+    },
+    "xle": {
+      "price": 55.02,
+      "chg": -2.76,
+      "week": -3.66
+    },
+    "xli": {
+      "price": 173.51,
+      "chg": 1.87,
+      "week": 0.45
+    }
   },
-  "passed": [],
-  "passed_count": 0,
+  "passed": [
+    {
+      "ticker": "KOD",
+      "name": "Kodiak Sciences Inc",
+      "sector": "Healthcare",
+      "change_pct": 11.11,
+      "price": 44.9,
+      "rsi": 61.7,
+      "adx": 43.8,
+      "score": 7,
+      "ql_pos": "a",
+      "ql_desc": "200MA 대비 고점권 — 추격 주의",
+      "ytd": 72.6,
+      "52w_pct": 99.6,
+      "macd_bull": false,
+      "above_200ma": true,
+      "catalysts": [
+        "Eagle Eye Solutions Group Leads The Charge In UK Penny Stocks",
+        "Kodiak Sciences (KOD) Reports Q4 EPS of ($1.05)",
+        "Kodiak Sciences GLOW2 Win Puts Zenkuda And Funding Needs In Focus"
+      ],
+      "risks": [
+        "ADR 10.9% — 변동성 큼, 포지션 사이징 주의",
+        "공매도 비율 23.7% — 숏 스퀴즈 또는 추가 하락 리스크",
+        "MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장",
+        "Beta 2.4 — 시장 변동 시 과대 반응 가능"
+      ],
+      "analyst_rec": "none",
+      "analyst_target": 56.33333,
+      "summary": "Kodiak Sciences Inc., a clinical stage biopharmaceutical company, engages in the research, development, and commercialization of therapeutics to treat retinal diseases. Its lead product candidate is t"
+    },
+    {
+      "ticker": "CGON",
+      "name": "CG Oncology, Inc.",
+      "sector": "Healthcare",
+      "change_pct": 10.69,
+      "price": 73.43,
+      "rsi": 72.4,
+      "adx": 37.1,
+      "score": 7,
+      "ql_pos": "a",
+      "ql_desc": "200MA 대비 고점권 — 추격 주의",
+      "ytd": 75.7,
+      "52w_pct": 100.0,
+      "macd_bull": false,
+      "above_200ma": true,
+      "catalysts": [
+        "CGON Stock Up 60.8% in Six Months: Here's What You Need to Know",
+        "As Terns Stock Soars 1,400%, What Does One Fund's $5.2 Million Sale Signal to Investors?",
+        "This Biotech Stock Up 135% Just Faced a $44 Million Trim. Here's What Investors Should Know"
+      ],
+      "risks": [
+        "RSI 72 — 단기 과열 구간, 눌림 가능성",
+        "공매도 비율 13.1% — 숏 스퀴즈 또는 추가 하락 리스크",
+        "MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장"
+      ],
+      "analyst_rec": "strong_buy",
+      "analyst_target": 85.57143,
+      "summary": "CG Oncology, Inc., a late-stage clinical biopharmaceutical company, develops and commercializes cretostimogene grenadenorepvec for patients with bladder cancer in the United States. The company's prod"
+    },
+    {
+      "ticker": "ROAD",
+      "name": "Construction Partners, Inc.",
+      "sector": "Industrials",
+      "change_pct": 12.03,
+      "price": 125.64,
+      "rsi": 65.0,
+      "adx": 28.0,
+      "score": 5,
+      "ql_pos": "b",
+      "ql_desc": "신고가권 타이트 횡보 (LREP 최적)",
+      "ytd": 12.0,
+      "52w_pct": 90.5,
+      "macd_bull": false,
+      "above_200ma": true,
+      "catalysts": [
+        "1 High-Flying Stock Worth Your Attention and 2 We Question",
+        "A Look At Construction Partners (ROAD) Valuation After Recent Share Price Weakness",
+        "1 Small-Cap Stock to Own for Decades and 2 We Brush Off"
+      ],
+      "risks": [
+        "MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장"
+      ],
+      "analyst_rec": "strong_buy",
+      "analyst_target": 142.0,
+      "summary": "Construction Partners, Inc., a civil infrastructure company, constructs and maintains roadways in Alabama, Florida, Georgia, North Carolina, Oklahoma, South Carolina, Tennessee, and Texas. The company"
+    },
+    {
+      "ticker": "CIFR",
+      "name": "Cipher Digital Inc.",
+      "sector": "Technology",
+      "change_pct": 11.71,
+      "price": 19.37,
+      "rsi": 73.9,
+      "adx": 14.5,
+      "score": 3,
+      "ql_pos": "c",
+      "ql_desc": "일반 상승 구간",
+      "ytd": 19.6,
+      "52w_pct": 78.4,
+      "macd_bull": false,
+      "above_200ma": true,
+      "catalysts": [
+        "Cipher Digital Inc. (CIFR) Stock Drops Despite Market Gains: Important Facts to Note",
+        "Cipher Digital Is A Small-Cap Stock With Big Ambitions",
+        "Cipher Digital (CIFR) Is Up 28.9% After Landing 15-Year Hyperscaler Lease And $200M Credit Line – Has The Bull Case Changed?"
+      ],
+      "risks": [
+        "RSI 74 — 단기 과열 구간, 눌림 가능성",
+        "ADR 9.2% — 변동성 큼, 포지션 사이징 주의",
+        "공매도 비율 16.7% — 숏 스퀴즈 또는 추가 하락 리스크",
+        "MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장",
+        "Beta 3.0 — 시장 변동 시 과대 반응 가능"
+      ],
+      "analyst_rec": "strong_buy",
+      "analyst_target": 27.60714,
+      "summary": "Cipher Digital Inc., together with its subsidiaries, develops and operates industrial-scale data centers for bitcoin mining and high-performance compute (HPC) hosting in the United States. It develops"
+    }
+  ],
+  "passed_count": 4,
   "watchlist": {
     "FSLY": {
       "first_seen": "2026-04-15",
-      "days": 2,
+      "days": 3,
       "appearances": 1,
       "last_score": 6,
       "last_ql_pos": "b",
-      "status": "2일차 — 베이스 형성 대기"
+      "status": "3일차 — 진입 가능 (b 선호)"
     },
     "MLYS": {
       "first_seen": "2026-04-15",
+      "days": 3,
+      "appearances": 1,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "AXTI": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 7,
+      "last_score": 7,
+      "last_ql_pos": "a",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "PL": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 7,
+      "last_score": 9,
+      "last_ql_pos": "a",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "NN": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 7,
+      "last_score": 6,
+      "last_ql_pos": "c",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "DOCN": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 6,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "NVTS": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 3,
+      "last_score": 3,
+      "last_ql_pos": "b",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "RKLB": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 3,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "ALB": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 2,
+      "last_score": 2,
+      "last_ql_pos": "a",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "LUNR": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 1,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "AAOI": {
+      "first_seen": "2026-04-16",
+      "days": 2,
+      "appearances": 1,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "2일차 — 베이스 형성 대기"
+    },
+    "RDW": {
+      "first_seen": "2026-04-16",
       "days": 2,
       "appearances": 1,
       "last_score": 3,
       "last_ql_pos": "c",
       "status": "2일차 — 베이스 형성 대기"
     },
-    "AXTI": {
-      "first_seen": "2026-04-16",
+    "USAR": {
+      "first_seen": "2026-04-17",
       "days": 1,
-      "appearances": 7,
-      "last_score": 7,
-      "last_ql_pos": "a",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "PL": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 7,
-      "last_score": 9,
-      "last_ql_pos": "a",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "NN": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 7,
-      "last_score": 6,
-      "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "DOCN": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 6,
-      "last_score": 5,
-      "last_ql_pos": "a",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "NVTS": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 3,
-      "last_score": 3,
+      "appearances": 4,
+      "last_score": 2,
       "last_ql_pos": "b",
       "status": "1일차 — 베이스 형성 대기"
     },
-    "RKLB": {
-      "first_seen": "2026-04-16",
+    "UAL": {
+      "first_seen": "2026-04-17",
       "days": 1,
-      "appearances": 3,
-      "last_score": 3,
+      "appearances": 4,
+      "last_score": 2,
       "last_ql_pos": "c",
       "status": "1일차 — 베이스 형성 대기"
     },
-    "ALB": {
-      "first_seen": "2026-04-16",
+    "JHX": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 4,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "HYMC": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 4,
+      "last_score": 1,
+      "last_ql_pos": "b",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "YETI": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 4,
+      "last_score": 0,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "W": {
+      "first_seen": "2026-04-17",
       "days": 1,
       "appearances": 2,
       "last_score": 2,
-      "last_ql_pos": "a",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "LUNR": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 1,
-      "last_score": 5,
-      "last_ql_pos": "a",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "AAOI": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 1,
-      "last_score": 5,
-      "last_ql_pos": "a",
-      "status": "1일차 — 베이스 형성 대기"
-    },
-    "RDW": {
-      "first_seen": "2026-04-16",
-      "days": 1,
-      "appearances": 1,
-      "last_score": 3,
       "last_ql_pos": "c",
       "status": "1일차 — 베이스 형성 대기"
+    },
+    "RYAAY": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 3,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "LUV": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 2,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "CCL": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 2,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "CUK": {
+      "first_seen": "2026-04-17",
+      "days": 1,
+      "appearances": 1,
+      "last_score": 2,
+      "last_ql_pos": "c",
+      "status": "1일차 — 베이스 형성 대기"
+    },
+    "KOD": {
+      "first_seen": "2026-04-18",
+      "days": 0,
+      "appearances": 4,
+      "last_score": 7,
+      "last_ql_pos": "a",
+      "status": "신규 등장"
+    },
+    "CGON": {
+      "first_seen": "2026-04-18",
+      "days": 0,
+      "appearances": 4,
+      "last_score": 7,
+      "last_ql_pos": "a",
+      "status": "신규 등장"
+    },
+    "ROAD": {
+      "first_seen": "2026-04-18",
+      "days": 0,
+      "appearances": 4,
+      "last_score": 5,
+      "last_ql_pos": "b",
+      "status": "신규 등장"
+    },
+    "CIFR": {
+      "first_seen": "2026-04-18",
+      "days": 0,
+      "appearances": 4,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "신규 등장"
     }
   }
 }
