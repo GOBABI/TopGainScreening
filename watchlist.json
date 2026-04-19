@@ -274,7 +274,8 @@
       "last_ql_pos": "a",
       "last_ql_desc": "200MA 대비 고점권 — 추격 주의",
       "name": "Kodiak Sciences Inc",
-      "sector": "Healthcare"
+      "sector": "Healthcare",
+      "exchange": "NMS"
     },
     "CGON": {
       "first_seen": "2026-04-18",
@@ -286,7 +287,8 @@
       "last_ql_pos": "a",
       "last_ql_desc": "200MA 대비 고점권 — 추격 주의",
       "name": "CG Oncology, Inc.",
-      "sector": "Healthcare"
+      "sector": "Healthcare",
+      "exchange": "NMS"
     },
     "ROAD": {
       "first_seen": "2026-04-18",
@@ -298,7 +300,8 @@
       "last_ql_pos": "b",
       "last_ql_desc": "신고가권 타이트 횡보 (LREP 최적)",
       "name": "Construction Partners, Inc.",
-      "sector": "Industrials"
+      "sector": "Industrials",
+      "exchange": "NMS"
     },
     "CIFR": {
       "first_seen": "2026-04-18",
@@ -310,7 +313,8 @@
       "last_ql_pos": "c",
       "last_ql_desc": "일반 상승 구간",
       "name": "Cipher Digital Inc.",
-      "sector": "Technology"
+      "sector": "Technology",
+      "exchange": "NMS"
     }
   }
 }
