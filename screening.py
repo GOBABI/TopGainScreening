@@ -347,6 +347,7 @@ def run_screening(gainers):
 
         passed.append({
             'ticker':       ticker,
+            'exchange':     q.get('exchange', 'NMS'),
             'name':         q.get('shortName') or '',
             'full_name':    detail.get('longName') or q.get('shortName') or '',
             'price':        round(q['regularMarketPrice'], 2),
@@ -459,8 +460,9 @@ def update_watchlist(passed):
         tk = s['ticker']
         if tk in tickers:
             e = tickers[tk]
+            if e.get('last_seen') != TODAY:
+                e['appearances'] = e.get('appearances', 1) + 1
             e['last_seen']       = TODAY
-            e['appearances']    += 1
             e['last_price']      = s['price']
             e['last_change_pct'] = s['change_pct']
             e['last_score']      = s['score']
@@ -468,6 +470,7 @@ def update_watchlist(passed):
             e['last_ql_desc']    = s['ql_desc']
             e['name']            = s['name']
             e['sector']          = s['sector']
+            e['exchange']        = s.get('exchange', e.get('exchange', 'NMS'))
         else:
             tickers[tk] = {
                 'first_seen':      TODAY,
@@ -480,6 +483,7 @@ def update_watchlist(passed):
                 'last_ql_desc':    s['ql_desc'],
                 'name':            s['name'],
                 'sector':          s['sector'],
+                'exchange':        s.get('exchange', 'NMS'),
             }
 
     wl['tickers'] = tickers
@@ -537,6 +541,20 @@ def build_pdf(passed, mkt, wl=None):
 
     def P(text, size=9, bold=False, sb=False, color=None, align=TA_LEFT):
         return Paragraph(str(text), S(size, bold, sb, color, align))
+
+    _tv_exchange_map = {
+        'NMS': 'NASDAQ', 'NGM': 'NASDAQ', 'NCM': 'NASDAQ',
+        'NYQ': 'NYSE',   'ASE': 'AMEX',   'PCX': 'AMEX',
+    }
+
+    def tv_link(ticker, exchange_code, is_today=False):
+        exch  = _tv_exchange_map.get(exchange_code, 'NASDAQ')
+        url   = f"https://www.tradingview.com/chart/?symbol={exch}:{ticker}"
+        color = "#4caf50" if is_today else "#00acc1"
+        return Paragraph(
+            f'<a href="{url}"><font color="{color}"><b>{ticker}</b></font></a>',
+            S(7.5, align=TA_CENTER)
+        )
 
     def HR(c=None, t=1, sp=3):
         return HRFlowable(width='100%', thickness=t, color=c or C['mgray'],
@@ -880,7 +898,7 @@ def build_pdf(passed, mkt, wl=None):
             reapp_txt = f"+{apps}회" if apps > 1 else "첫 등장"
 
             wl_rows.append([
-                tk,
+                tv_link(tk, e.get('exchange', 'NMS'), is_today),
                 (e.get('name','')[:18] + '..') if len(e.get('name','')) > 18 else e.get('name',''),
                 e.get('first_seen', TODAY),
                 f"{d}일" if d > 0 else "오늘",
@@ -917,8 +935,7 @@ def build_pdf(passed, mkt, wl=None):
             ]
             if is_today:
                 wl_style += [
-                    ('TEXTCOLOR', (0, ri), (0, ri), C['green']),
-                    ('FONTNAME',  (0, ri), (0, ri), 'PTB'),
+                    ('BACKGROUND', (0, ri), (0, ri), colors.HexColor('#1a3a1a')),
                 ]
         wlt.setStyle(TableStyle(wl_style))
 

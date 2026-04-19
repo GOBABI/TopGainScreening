@@ -10,12 +10,40 @@ import sys
 import subprocess
 import requests
 
-BOT_TOKEN      = "8702268897:AAEhRnt0nuBnYCJeMdhofbX_h-D_YBTJxCE"
-BASE_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}"
-BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
-WATCHLIST_FILE = os.path.join(BASE_DIR, "watchlist.json")
-PRE_RESULT_FILE = os.path.join(BASE_DIR, "pre_result.json")  # 마지막 /pre 결과 캐시
-CHAT_ID        = "7371637453"
+BOT_TOKEN       = "8702268897:AAEhRnt0nuBnYCJeMdhofbX_h-D_YBTJxCE"
+BASE_URL        = f"https://api.telegram.org/bot{BOT_TOKEN}"
+BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
+WATCHLIST_FILE  = os.path.join(BASE_DIR, "watchlist.json")
+PRE_RESULT_FILE = os.path.join(BASE_DIR, "pre_result.json")
+OFFSET_FILE     = os.path.join(BASE_DIR, ".bot_offset")
+PID_FILE        = os.path.join(BASE_DIR, ".bot.pid")
+CHAT_ID         = "7371637453"
+
+_screening_running = False
+
+
+def _acquire_single_instance():
+    """이전 인스턴스가 있으면 종료하고 현재 PID 등록"""
+    import signal
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE) as f:
+                old_pid = int(f.read().strip())
+            if old_pid != os.getpid():
+                os.kill(old_pid, signal.SIGTERM)
+                time.sleep(1)
+                print(f"[bot] 이전 인스턴스 종료 (PID {old_pid})")
+        except (ProcessLookupError, ValueError):
+            pass
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+
+def _release_single_instance():
+    try:
+        os.remove(PID_FILE)
+    except Exception:
+        pass
 
 # 기본 스캔 대상 (watchlist에 없을 경우 폴백)
 DEFAULT_SYMBOLS = [
@@ -48,9 +76,19 @@ def send_message(chat_id, text):
         print(f"[sendMessage 오류] {e}")
 
 
-def run_screening(chat_id):
-    send_message(chat_id, "⏳ 스크리닝 시작 중... 잠시 기다려 주세요.")
+def run_screening(chat_id, sent_flags=None):
+    global _screening_running
+    if _screening_running:
+        send_message(chat_id, "⚠️ 이미 스크리닝이 실행 중입니다. 완료 후 다시 시도하세요.")
+        return
+    _screening_running = True
+    if sent_flags is not None:
+        from datetime import datetime
+        import pytz
+        today = datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
+        sent_flags["report"] = today
     try:
+        send_message(chat_id, "⏳ 스크리닝 시작 중... 잠시 기다려 주세요.")
         result = subprocess.run(
             [sys.executable, os.path.join(BASE_DIR, "screening.py")],
             capture_output=True, text=True, timeout=300
@@ -64,6 +102,8 @@ def run_screening(chat_id):
         send_message(chat_id, "⚠️ 타임아웃: 스크리닝이 5분을 초과했습니다.")
     except Exception as e:
         send_message(chat_id, f"❌ 실행 오류: {e}")
+    finally:
+        _screening_running = False
 
 
 def _is_regular_market_open():
@@ -292,7 +332,7 @@ def _auto_schedule(sent_flags: dict):
     # 정규장 마감 후 (16:05 ~ 16:10) — report 자동 전송
     if 1605 <= hm <= 1610 and sent_flags.get("report") != today:
         print(f"[bot] 자동 report 전송 ({now.strftime('%H:%M')} ET)")
-        run_screening(CHAT_ID)
+        run_screening(CHAT_ID, sent_flags)
         sent_flags["report"] = today
 
     # 개장 30분 전 (09:00 ~ 09:05) — pre 자동 전송
@@ -302,14 +342,32 @@ def _auto_schedule(sent_flags: dict):
         sent_flags["pre"] = today
 
 
+def _load_offset():
+    try:
+        with open(OFFSET_FILE) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+def _save_offset(offset):
+    try:
+        with open(OFFSET_FILE, "w") as f:
+            f.write(str(offset))
+    except Exception:
+        pass
+
 def main():
+    _acquire_single_instance()
+    import atexit
+    atexit.register(_release_single_instance)
     print("[bot] 텔레그램 봇 시작 — /report, /pre 대기 중... (자동 스케줄 포함)")
-    offset = None
+    offset = _load_offset()
     sent_flags: dict = {}
     while True:
         updates = get_updates(offset)
         for update in updates:
             offset = update["update_id"] + 1
+            _save_offset(offset)
             msg = update.get("message", {})
             text = msg.get("text", "").strip()
             chat_id = msg.get("chat", {}).get("id")
@@ -318,7 +376,7 @@ def main():
 
             if text == "/report" or text.startswith("/report@"):
                 print(f"[bot] /report 수신 (chat_id={chat_id})")
-                run_screening(chat_id)
+                run_screening(chat_id, sent_flags)
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)

@@ -266,51 +266,55 @@
     },
     "KOD": {
       "first_seen": "2026-04-18",
-      "last_seen": "2026-04-18",
-      "appearances": 6,
+      "last_seen": "2026-04-19",
+      "appearances": 8,
       "last_price": 44.9,
       "last_change_pct": 11.11,
       "last_score": 7,
       "last_ql_pos": "a",
       "last_ql_desc": "200MA 대비 고점권 — 추격 주의",
       "name": "Kodiak Sciences Inc",
-      "sector": "Healthcare"
+      "sector": "Healthcare",
+      "exchange": "NMS"
     },
     "CGON": {
       "first_seen": "2026-04-18",
-      "last_seen": "2026-04-18",
-      "appearances": 6,
+      "last_seen": "2026-04-19",
+      "appearances": 8,
       "last_price": 73.43,
       "last_change_pct": 10.69,
       "last_score": 7,
       "last_ql_pos": "a",
       "last_ql_desc": "200MA 대비 고점권 — 추격 주의",
       "name": "CG Oncology, Inc.",
-      "sector": "Healthcare"
+      "sector": "Healthcare",
+      "exchange": "NMS"
     },
     "ROAD": {
       "first_seen": "2026-04-18",
-      "last_seen": "2026-04-18",
-      "appearances": 6,
+      "last_seen": "2026-04-19",
+      "appearances": 8,
       "last_price": 125.64,
       "last_change_pct": 12.03,
       "last_score": 5,
       "last_ql_pos": "b",
       "last_ql_desc": "신고가권 타이트 횡보 (LREP 최적)",
       "name": "Construction Partners, Inc.",
-      "sector": "Industrials"
+      "sector": "Industrials",
+      "exchange": "NMS"
     },
     "CIFR": {
       "first_seen": "2026-04-18",
-      "last_seen": "2026-04-18",
-      "appearances": 6,
+      "last_seen": "2026-04-19",
+      "appearances": 8,
       "last_price": 19.37,
       "last_change_pct": 11.71,
       "last_score": 3,
       "last_ql_pos": "c",
       "last_ql_desc": "일반 상승 구간",
       "name": "Cipher Digital Inc.",
-      "sector": "Technology"
+      "sector": "Technology",
+      "exchange": "NMS"
     }
   }
 }

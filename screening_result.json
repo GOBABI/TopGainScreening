@@ -1,5 +1,5 @@
 {
-  "date": "2026-04-18",
+  "date": "2026-04-19",
   "market": {
     "spy": {
       "price": 710.14,
@@ -99,7 +99,7 @@
         "MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장"
       ],
       "analyst_rec": "strong_buy",
-      "analyst_target": 85.57143,
+      "analyst_target": 87.42857,
       "summary": "CG Oncology, Inc., a late-stage clinical biopharmaceutical company, develops and commercializes cretostimogene grenadenorepvec for patients with bladder cancer in the United States. The company's prod"
     },
     {
@@ -165,211 +165,211 @@
   "watchlist": {
     "FSLY": {
       "first_seen": "2026-04-15",
-      "days": 3,
+      "days": 4,
       "appearances": 1,
       "last_score": 6,
       "last_ql_pos": "b",
-      "status": "3일차 — 진입 가능 (b 선호)"
+      "status": "4일차 — 진입 가능 (b 선호)"
     },
     "MLYS": {
       "first_seen": "2026-04-15",
+      "days": 4,
+      "appearances": 1,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "4일차 — 진입 가능 구간"
+    },
+    "AXTI": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 7,
+      "last_score": 7,
+      "last_ql_pos": "a",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "PL": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 7,
+      "last_score": 9,
+      "last_ql_pos": "a",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "NN": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 7,
+      "last_score": 6,
+      "last_ql_pos": "c",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "DOCN": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 6,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "NVTS": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 3,
+      "last_score": 3,
+      "last_ql_pos": "b",
+      "status": "3일차 — 진입 가능 (b 선호)"
+    },
+    "RKLB": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 3,
+      "last_score": 3,
+      "last_ql_pos": "c",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "ALB": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 2,
+      "last_score": 2,
+      "last_ql_pos": "a",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "LUNR": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 1,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "AAOI": {
+      "first_seen": "2026-04-16",
+      "days": 3,
+      "appearances": 1,
+      "last_score": 5,
+      "last_ql_pos": "a",
+      "status": "3일차 — 진입 가능 구간"
+    },
+    "RDW": {
+      "first_seen": "2026-04-16",
       "days": 3,
       "appearances": 1,
       "last_score": 3,
       "last_ql_pos": "c",
       "status": "3일차 — 진입 가능 구간"
     },
-    "AXTI": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 7,
-      "last_score": 7,
-      "last_ql_pos": "a",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "PL": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 7,
-      "last_score": 9,
-      "last_ql_pos": "a",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "NN": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 7,
-      "last_score": 6,
-      "last_ql_pos": "c",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "DOCN": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 6,
-      "last_score": 5,
-      "last_ql_pos": "a",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "NVTS": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 3,
-      "last_score": 3,
-      "last_ql_pos": "b",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "RKLB": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 3,
-      "last_score": 3,
-      "last_ql_pos": "c",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "ALB": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 2,
-      "last_score": 2,
-      "last_ql_pos": "a",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "LUNR": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 1,
-      "last_score": 5,
-      "last_ql_pos": "a",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "AAOI": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 1,
-      "last_score": 5,
-      "last_ql_pos": "a",
-      "status": "2일차 — 베이스 형성 대기"
-    },
-    "RDW": {
-      "first_seen": "2026-04-16",
-      "days": 2,
-      "appearances": 1,
-      "last_score": 3,
-      "last_ql_pos": "c",
-      "status": "2일차 — 베이스 형성 대기"
-    },
     "USAR": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 4,
       "last_score": 2,
       "last_ql_pos": "b",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "UAL": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 4,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "JHX": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 4,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "HYMC": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 4,
       "last_score": 1,
       "last_ql_pos": "b",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "YETI": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 4,
       "last_score": 0,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "W": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 2,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "RYAAY": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 3,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "LUV": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 2,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "CCL": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 2,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "CUK": {
       "first_seen": "2026-04-17",
-      "days": 1,
+      "days": 2,
       "appearances": 1,
       "last_score": 2,
       "last_ql_pos": "c",
-      "status": "1일차 — 베이스 형성 대기"
+      "status": "2일차 — 베이스 형성 대기"
     },
     "KOD": {
       "first_seen": "2026-04-18",
-      "days": 0,
-      "appearances": 4,
+      "days": 1,
+      "appearances": 8,
       "last_score": 7,
       "last_ql_pos": "a",
-      "status": "신규 등장"
+      "status": "1일차 — 베이스 형성 대기"
     },
     "CGON": {
       "first_seen": "2026-04-18",
-      "days": 0,
-      "appearances": 4,
+      "days": 1,
+      "appearances": 8,
       "last_score": 7,
       "last_ql_pos": "a",
-      "status": "신규 등장"
+      "status": "1일차 — 베이스 형성 대기"
     },
     "ROAD": {
       "first_seen": "2026-04-18",
-      "days": 0,
-      "appearances": 4,
+      "days": 1,
+      "appearances": 8,
       "last_score": 5,
       "last_ql_pos": "b",
-      "status": "신규 등장"
+      "status": "1일차 — 베이스 형성 대기"
     },
     "CIFR": {
       "first_seen": "2026-04-18",
-      "days": 0,
-      "appearances": 4,
+      "days": 1,
+      "appearances": 8,
       "last_score": 3,
       "last_ql_pos": "c",
-      "status": "신규 등장"
+      "status": "1일차 — 베이스 형성 대기"
     }
   }
 }
