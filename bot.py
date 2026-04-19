@@ -315,6 +315,31 @@ def scan_premarket(chat_id):
 
 
 
+def run_refresh(chat_id):
+    global _screening_running
+    if _screening_running:
+        send_message(chat_id, "⚠️ 스크리닝 실행 중 — 완료 후 시도하세요.")
+        return
+    _screening_running = True
+    try:
+        send_message(chat_id, "⏳ 리포트 재생성 중...")
+        result = subprocess.run(
+            [sys.executable, os.path.join(BASE_DIR, "refresh_report.py")],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            send_message(chat_id, "✅ 리포트 재생성 완료 — Netlify 반영됐습니다.")
+        else:
+            err = (result.stderr or result.stdout)[-500:]
+            send_message(chat_id, f"❌ 재생성 오류\n<pre>{err}</pre>")
+    except subprocess.TimeoutExpired:
+        send_message(chat_id, "⚠️ 타임아웃: 2분 초과")
+    except Exception as e:
+        send_message(chat_id, f"❌ 실행 오류: {e}")
+    finally:
+        _screening_running = False
+
+
 def _auto_schedule(sent_flags: dict):
     """정규장 마감 후 report, 개장 전 pre 자동 전송"""
     from datetime import datetime
@@ -322,7 +347,7 @@ def _auto_schedule(sent_flags: dict):
     et = pytz.timezone("America/New_York")
     now = datetime.now(et)
 
-    # 주말 스킵
+    # 주말 자동 스케줄 스킵 (수동 /report, /refresh는 항상 허용)
     if now.weekday() >= 5:
         return
 
@@ -377,6 +402,9 @@ def main():
             if text == "/report" or text.startswith("/report@"):
                 print(f"[bot] /report 수신 (chat_id={chat_id})")
                 run_screening(chat_id, sent_flags)
+            elif text == "/refresh" or text.startswith("/refresh@"):
+                print(f"[bot] /refresh 수신 (chat_id={chat_id})")
+                run_refresh(chat_id)
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)
@@ -385,6 +413,7 @@ def main():
                     chat_id,
                     "안녕하세요!\n\n"
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
+                    "/refresh — 기존 데이터로 HTML 재생성 & Netlify 재배포\n"
                     "/pre — 프리마켓 갭 상승 종목 (정규장 시작 후엔 첫 1·5분봉 포함)\n\n"
                     "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
                 )
