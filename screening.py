@@ -473,9 +473,10 @@ def update_watchlist(passed):
         tk = s['ticker']
         if tk in tickers:
             e = tickers[tk]
-            e['last_seen']       = TODAY
-            e['appearances']    += 1
             e['last_price']      = s['price']
+            if e.get('last_seen') != TODAY:
+                e['last_seen']    = TODAY
+                e['appearances'] += 1
             e['last_change_pct'] = s['change_pct']
             e['last_score']      = s['score']
             e['last_ql_pos']     = s['ql_pos']
