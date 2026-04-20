@@ -443,6 +443,13 @@ def run_test(chat_id):
     except Exception:
         return None
 
+def _load_offset():
+    try:
+        with open(OFFSET_FILE) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
 def _save_offset(offset):
     try:
         with open(OFFSET_FILE, "w") as f:
