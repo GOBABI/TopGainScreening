@@ -432,7 +432,28 @@ def github_push_watchlist():
     except Exception as e:
         log(f"GitHub push 실패 (무시): {e}")
 
+def _is_after_market_close():
+    """미국 ET 기준 정규장 마감(16:00) 이후인지 확인"""
+    import pytz
+    et = pytz.timezone("America/New_York")
+    now = datetime.now(et)
+    if now.weekday() >= 5:
+        return True  # 주말은 전날 마감 기준
+    return now.hour >= 16
+
 def load_archive_dates():
+    # GitHub에서 먼저 가져오기
+    import base64
+    try:
+        r = requests.get(f"{GITHUB_API}/archive.json", headers=GH_HEADERS, timeout=10)
+        if r.status_code == 200:
+            content = base64.b64decode(r.json()['content']).decode('utf-8')
+            with open(ARCHIVE_PATH, 'w') as f:
+                f.write(content)
+            log("GitHub archive.json pull 완료")
+    except Exception as e:
+        log(f"GitHub archive pull 실패 (무시): {e}")
+
     if os.path.exists(ARCHIVE_PATH):
         with open(ARCHIVE_PATH, 'r') as f:
             return json.load(f).get('dates', [])
@@ -441,6 +462,21 @@ def load_archive_dates():
 def save_archive_dates(dates):
     with open(ARCHIVE_PATH, 'w') as f:
         json.dump({'dates': dates}, f)
+    # GitHub에 동기화
+    import base64
+    try:
+        with open(ARCHIVE_PATH, 'r') as f:
+            content = f.read()
+        encoded = base64.b64encode(content.encode()).decode()
+        r = requests.get(f"{GITHUB_API}/archive.json", headers=GH_HEADERS, timeout=10)
+        sha = r.json().get('sha') if r.status_code == 200 else None
+        payload = {"message": f"archive update {TODAY}", "content": encoded}
+        if sha:
+            payload["sha"] = sha
+        requests.put(f"{GITHUB_API}/archive.json", headers=GH_HEADERS, json=payload, timeout=10)
+        log("GitHub archive.json push 완료")
+    except Exception as e:
+        log(f"GitHub archive push 실패 (무시): {e}")
 
 def netlify_deploy(archive_dates):
     """HTML을 index.html + YYYY-MM-DD.html 두 경로로 Netlify 배포"""
@@ -751,9 +787,12 @@ def main():
         wl      = refresh_watchlist_ta(wl, today_tickers)
         dump_json(passed, mkt, wl)
         archive_dates = load_archive_dates()
-        if TODAY not in archive_dates:
+        # 정규장 마감 이후에만 오늘 날짜를 archive에 등록 (덮어쓰기 방지)
+        if _is_after_market_close() and TODAY not in archive_dates:
             archive_dates.append(TODAY)
-        save_archive_dates(archive_dates)
+            save_archive_dates(archive_dates)
+        elif TODAY not in archive_dates:
+            log("장중 실행 — archive 날짜 등록 스킵 (마감 후 확정)")
         build_html(passed, mkt, wl, archive_dates)
         send_telegram_html(passed, mkt)
         narrative = build_narrative(passed, mkt)
