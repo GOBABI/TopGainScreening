@@ -76,11 +76,35 @@ def send_message(chat_id, text):
         print(f"[sendMessage 오류] {e}")
 
 
+def _market_status():
+    """현재 미국 시장 상태 반환: 'open' | 'pre' | 'after' | 'closed'"""
+    from datetime import datetime
+    import pytz
+    et = pytz.timezone("America/New_York")
+    now = datetime.now(et)
+    if now.weekday() >= 5:
+        return 'closed'
+    hm = now.hour * 100 + now.minute
+    if 400 <= hm < 930:
+        return 'pre'
+    if 930 <= hm < 1600:
+        return 'open'
+    if 1600 <= hm < 2000:
+        return 'after'
+    return 'closed'
+
+
 def run_screening(chat_id, sent_flags=None):
     global _screening_running
     if _screening_running:
         send_message(chat_id, "⚠️ 이미 스크리닝이 실행 중입니다. 완료 후 다시 시도하세요.")
         return
+
+    status = _market_status()
+    if status == 'closed':
+        send_message(chat_id, "📭 현재 미국 장이 열리지 않는 시간입니다 (주말 또는 심야).\n데이터가 없어 스크리닝을 실행할 수 없습니다.")
+        return
+
     _screening_running = True
     if sent_flags is not None:
         from datetime import datetime
@@ -88,7 +112,12 @@ def run_screening(chat_id, sent_flags=None):
         today = datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
         sent_flags["report"] = today
     try:
-        send_message(chat_id, "⏳ 스크리닝 시작 중... 잠시 기다려 주세요.")
+        if status == 'pre':
+            send_message(chat_id, "🔄 스크리닝 중입니다... (프리마켓 데이터 기준)")
+        elif status == 'after':
+            send_message(chat_id, "🔄 스크리닝 중입니다... (장 마감 후 데이터 기준)")
+        else:
+            send_message(chat_id, "🔄 스크리닝 중입니다...")
         result = subprocess.run(
             [sys.executable, os.path.join(BASE_DIR, "screening.py")],
             capture_output=True, text=True, timeout=300
@@ -399,12 +428,9 @@ def main():
             if not chat_id:
                 continue
 
-            if text == "/report" or text.startswith("/report@"):
+            if text in ("/report", "/refresh") or text.startswith(("/report@", "/refresh@")):
                 print(f"[bot] /report 수신 (chat_id={chat_id})")
                 run_screening(chat_id, sent_flags)
-            elif text == "/refresh" or text.startswith("/refresh@"):
-                print(f"[bot] /refresh 수신 (chat_id={chat_id})")
-                run_refresh(chat_id)
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)
@@ -413,8 +439,7 @@ def main():
                     chat_id,
                     "안녕하세요!\n\n"
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
-                    "/refresh — 기존 데이터로 HTML 재생성 & Netlify 재배포\n"
-                    "/pre — 프리마켓 갭 상승 종목 (정규장 시작 후엔 첫 1·5분봉 포함)\n\n"
+                    "/pre — 프리마켓 갭 상승 종목 스캔\n\n"
                     "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
                 )
 
