@@ -1,0 +1,5 @@
+yfinance
+reportlab
+pandas
+requests
+pytz
