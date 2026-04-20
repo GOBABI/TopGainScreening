@@ -1,0 +1,5 @@
+yfinance==0.2.55
+reportlab
+pandas
+requests
+pytz
