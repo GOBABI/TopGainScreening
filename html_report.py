@@ -647,19 +647,17 @@ def send_telegram_html(passed, mkt):
 
     for attempt in range(3):
         try:
-            with open(HTML_OUT, 'rb') as f:
-                r = requests.post(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
-                    data={'chat_id': CHAT_ID, 'caption': caption},
-                    files={'document': (f'TGS_Report_{TODAY}.html', f, 'text/html')},
-                    timeout=60
-                )
+            r = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={'chat_id': CHAT_ID, 'text': caption},
+                timeout=30
+            )
             if r.ok and r.json().get('ok'):
-                print("[html_report] 텔레그램 HTML 전송 완료")
+                print("[html_report] 텔레그램 메시지 전송 완료")
                 return
             else:
                 print(f"[html_report] 텔레그램 재시도 {attempt+1}: {r.text[:100]}")
         except Exception as e:
             print(f"[html_report] 텔레그램 재시도 {attempt+1}: {e}")
         time.sleep(5)
-    raise RuntimeError("텔레그램 HTML 3회 실패")
+    raise RuntimeError("텔레그램 메시지 3회 실패")
