@@ -625,7 +625,7 @@ def build_html(passed, mkt, wl=None, archive_dates=None):
 
 
 # ── 텔레그램 전송 ─────────────────────────────────────────────────────
-PAGES_URL = "https://topgain-screening.netlify.app"
+PAGES_URL = "https://gobabi.github.io/TopGainScreening"
 
 
 def send_telegram_html(passed, mkt):

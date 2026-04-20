@@ -36,9 +36,7 @@ GH_HEADERS     = {
     "Authorization": f"token {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3+json",
 }
-NETLIFY_TOKEN    = "nfp_UucfNMudbMuT34ysro6p3wSX84YzaFWS128e"
-NETLIFY_SITE_ID  = "6de42aff-d3a4-4d20-b68a-b47bf1ec4701"
-NETLIFY_URL      = "https://topgain-screening.netlify.app"
+GITHUB_PAGES_URL = "https://gobabi.github.io/TopGainScreening"
 ARCHIVE_PATH     = os.path.join(BASE_DIR, 'archive.json')
 
 # ── 한국어 매핑 ────────────────────────────────────────────────────────
@@ -478,53 +476,67 @@ def save_archive_dates(dates):
     except Exception as e:
         log(f"GitHub archive push 실패 (무시): {e}")
 
-def netlify_deploy(archive_dates):
-    """HTML을 index.html + YYYY-MM-DD.html 두 경로로 Netlify 배포"""
-    import hashlib
+def github_pages_deploy(archive_dates):
+    """HTML을 gh-pages 브랜치에 배포 (index.html + YYYY-MM-DD.html)"""
+    import base64
     try:
         html_path = os.path.join(BASE_DIR, 'us_market_screening_latest.html')
         if not os.path.exists(html_path):
-            log("HTML 파일 없음 — Netlify 배포 스킵")
+            log("HTML 파일 없음 — GitHub Pages 배포 스킵")
             return
 
         with open(html_path, 'rb') as f:
             html_bytes = f.read()
+        html_b64 = base64.b64encode(html_bytes).decode()
 
-        file_hash = hashlib.sha1(html_bytes).hexdigest()
-        # index.html과 날짜 파일은 동일 내용 → 같은 해시, 한 번만 업로드됨
-        files = {
-            "/index.html":        file_hash,
-            f"/{TODAY}.html":     file_hash,
-        }
+        base_url = f"https://api.github.com/repos/{GITHUB_REPO}"
 
-        r = requests.post(
-            f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}/deploys",
-            headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/json"},
-            json={"files": files},
-            timeout=30,
-        )
-        if not r.ok:
-            log(f"Netlify 배포 요청 실패: {r.status_code} {r.text[:100]}")
-            return
-
-        deploy = r.json()
-        deploy_id = deploy["id"]
-        required = set(deploy.get("required", []))
-
-        if file_hash in required:
-            r2 = requests.put(
-                f"https://api.netlify.com/api/v1/deploys/{deploy_id}/files/index.html",
-                headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "text/html"},
-                data=html_bytes,
-                timeout=60,
-            )
-            if not r2.ok:
-                log(f"Netlify 파일 업로드 실패: {r2.status_code} {r2.text[:100]}")
+        # gh-pages 브랜치 없으면 main 기준으로 생성
+        r = requests.get(f"{base_url}/git/refs/heads/gh-pages", headers=GH_HEADERS, timeout=10)
+        if r.status_code == 404:
+            r_main = requests.get(f"{base_url}/git/refs/heads/main", headers=GH_HEADERS, timeout=10)
+            if not r_main.ok:
+                log("GitHub Pages: main SHA 조회 실패")
                 return
+            main_sha = r_main.json()["object"]["sha"]
+            r_create = requests.post(
+                f"{base_url}/git/refs",
+                headers=GH_HEADERS,
+                json={"ref": "refs/heads/gh-pages", "sha": main_sha},
+                timeout=15,
+            )
+            if not r_create.ok:
+                log(f"GitHub Pages: gh-pages 브랜치 생성 실패: {r_create.text[:100]}")
+                return
+            log("gh-pages 브랜치 생성 완료")
 
-        log(f"Netlify 배포 완료: {NETLIFY_URL}")
+        def _upsert(path, content_b64):
+            url = f"{base_url}/contents/{path}"
+            r_get = requests.get(url, headers=GH_HEADERS, params={"ref": "gh-pages"}, timeout=15)
+            sha = r_get.json().get("sha") if r_get.ok else None
+            payload = {"message": f"deploy: {TODAY}", "content": content_b64, "branch": "gh-pages"}
+            if sha:
+                payload["sha"] = sha
+            r_put = requests.put(url, headers=GH_HEADERS, json=payload, timeout=60)
+            if not r_put.ok:
+                log(f"GitHub Pages 업로드 실패 ({path}): {r_put.status_code} {r_put.text[:100]}")
+                return False
+            return True
+
+        ok1 = _upsert("index.html", html_b64)
+        ok2 = _upsert(f"{TODAY}.html", html_b64)
+        if ok1 and ok2:
+            log(f"GitHub Pages 배포 완료: {GITHUB_PAGES_URL}")
+
+        # GitHub Pages 활성화 (이미 활성화된 경우 무시)
+        requests.post(
+            f"{base_url}/pages",
+            headers={**GH_HEADERS, "Accept": "application/vnd.github.switcheroo-preview+json"},
+            json={"source": {"branch": "gh-pages", "path": "/"}},
+            timeout=15,
+        )
     except Exception as e:
-        log(f"Netlify 배포 실패 (무시): {e}")
+        log(f"GitHub Pages 배포 실패 (무시): {e}")
 
 
 # ── 관심종목 워치리스트 ────────────────────────────────────────────────
@@ -798,7 +810,7 @@ def main():
         narrative = build_narrative(passed, mkt)
         send_telegram_narrative(narrative)
         github_push_watchlist()
-        netlify_deploy(archive_dates)
+        github_pages_deploy(archive_dates)
         log(f"완료 — 통과 {len(passed)}개 / 누적 관심 {len(wl.get('tickers',{}))}개")
         print(f"RESULT_JSON={JSON_OUT}")
     except Exception as e:
