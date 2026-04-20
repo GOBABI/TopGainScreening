@@ -396,7 +396,47 @@ def _auto_schedule(sent_flags: dict):
         sent_flags["pre"] = today
 
 
-def _load_offset():
+def run_test(chat_id):
+    send_message(chat_id, "🔧 진단 테스트 시작...")
+    try:
+        import yfinance as yf
+
+        lines = []
+
+        # 1. Yahoo Finance 연결
+        try:
+            result = yf.screen("day_gainers", count=50)
+            quotes = result.get("quotes", [])
+            lines.append(f"✅ Yahoo Finance 연결 OK — {len(quotes)}개 수집")
+            c10 = len([q for q in quotes if (q.get("regularMarketChangePercent") or 0) >= 10])
+            c5  = len([q for q in quotes if (q.get("regularMarketChangePercent") or 0) >= 5])
+            c3  = len([q for q in quotes if (q.get("regularMarketChangePercent") or 0) >= 3])
+            lines.append(f"  10%+ 통과: {c10}개")
+            lines.append(f"  5%+  통과: {c5}개")
+            lines.append(f"  3%+  통과: {c3}개")
+            if quotes:
+                top = sorted(quotes, key=lambda q: q.get("regularMarketChangePercent") or 0, reverse=True)[:3]
+                lines.append("  상위 3개:")
+                for q in top:
+                    lines.append(f"    {q.get('symbol')} +{q.get('regularMarketChangePercent',0):.1f}%")
+        except Exception as e:
+            lines.append(f"❌ Yahoo Finance 실패: {e}")
+
+        # 2. SPY 시장 데이터
+        try:
+            h = yf.Ticker("SPY").history(period="5d")
+            lines.append(f"✅ SPY 데이터 OK — 최근 종가 ${h['Close'].iloc[-1]:.2f}")
+        except Exception as e:
+            lines.append(f"❌ SPY 데이터 실패: {e}")
+
+        # 3. 시장 상태
+        status = _market_status()
+        status_label = {"open": "정규장 중", "pre": "프리마켓", "after": "장 마감 후", "closed": "휴장"}.get(status, status)
+        lines.append(f"📊 현재 시장: {status_label}")
+
+        send_message(chat_id, "\n".join(lines))
+    except Exception as e:
+        send_message(chat_id, f"❌ 테스트 오류: {e}")
     try:
         with open(OFFSET_FILE) as f:
             return int(f.read().strip())
@@ -434,12 +474,16 @@ def main():
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)
+            elif text == "/test" or text.startswith("/test@"):
+                print(f"[bot] /test 수신 (chat_id={chat_id})")
+                run_test(chat_id)
             elif text == "/start":
                 send_message(
                     chat_id,
                     "안녕하세요!\n\n"
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
-                    "/pre — 프리마켓 갭 상승 종목 스캔\n\n"
+                    "/pre — 프리마켓 갭 상승 종목 스캔\n"
+                    "/test — 서버 연결 및 데이터 진단\n\n"
                     "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
                 )
 
