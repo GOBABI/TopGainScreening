@@ -527,6 +527,17 @@ def github_pages_deploy(archive_dates):
         ok2 = _upsert(f"{TODAY}.html", html_b64)
         if ok1 and ok2:
             log(f"GitHub Pages 배포 완료: {GITHUB_PAGES_URL}")
+            requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={"chat_id": CHAT_ID, "text": f"🌐 GitHub Pages 업데이트 완료\n{GITHUB_PAGES_URL}"},
+                timeout=10,
+            )
+        else:
+            requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={"chat_id": CHAT_ID, "text": f"⚠️ GitHub Pages 업로드 실패 (ok1={ok1}, ok2={ok2})"},
+                timeout=10,
+            )
 
         # GitHub Pages 활성화 (이미 활성화된 경우 무시)
         requests.post(
@@ -536,7 +547,12 @@ def github_pages_deploy(archive_dates):
             timeout=15,
         )
     except Exception as e:
-        log(f"GitHub Pages 배포 실패 (무시): {e}")
+        log(f"GitHub Pages 배포 실패: {e}")
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data={"chat_id": CHAT_ID, "text": f"⚠️ GitHub Pages 오류: {str(e)[:200]}"},
+            timeout=10,
+        )
 
 
 # ── 관심종목 워치리스트 ────────────────────────────────────────────────
