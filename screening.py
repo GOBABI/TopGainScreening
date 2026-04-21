@@ -510,6 +510,7 @@ def github_pages_deploy(archive_dates):
                 return
             log("gh-pages 브랜치 생성 완료")
 
+        _upsert_err = []
         def _upsert(path, content_b64):
             url = f"{base_url}/contents/{path}"
             r_get = requests.get(url, headers=GH_HEADERS, params={"ref": "gh-pages"}, timeout=15)
@@ -519,7 +520,9 @@ def github_pages_deploy(archive_dates):
                 payload["sha"] = sha
             r_put = requests.put(url, headers=GH_HEADERS, json=payload, timeout=60)
             if not r_put.ok:
-                log(f"GitHub Pages 업로드 실패 ({path}): {r_put.status_code} {r_put.text[:100]}")
+                msg = f"{path}: {r_put.status_code} {r_put.text[:150]}"
+                log(f"GitHub Pages 업로드 실패 {msg}")
+                _upsert_err.append(msg)
                 return False
             return True
 
@@ -533,9 +536,10 @@ def github_pages_deploy(archive_dates):
                 timeout=10,
             )
         else:
+            err_detail = "\n".join(_upsert_err) if _upsert_err else "알 수 없는 오류"
             requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                data={"chat_id": CHAT_ID, "text": f"⚠️ GitHub Pages 업로드 실패 (ok1={ok1}, ok2={ok2})"},
+                data={"chat_id": CHAT_ID, "text": f"⚠️ GitHub Pages 업로드 실패\n{err_detail}"},
                 timeout=10,
             )
 
