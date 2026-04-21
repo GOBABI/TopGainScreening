@@ -29,7 +29,7 @@ def _report_date():
 
 TODAY      = _report_date()
 
-GITHUB_TOKEN   = "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"
+GITHUB_TOKEN   = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO    = "GOBABI/TopGainScreening"
 GITHUB_API     = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
 GH_HEADERS     = {
