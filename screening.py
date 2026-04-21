@@ -479,6 +479,8 @@ def save_archive_dates(dates):
 def github_pages_deploy(archive_dates):
     """HTML을 gh-pages 브랜치에 배포 (index.html + YYYY-MM-DD.html)"""
     import base64
+    token_hint = GITHUB_TOKEN[:6] + "..." if GITHUB_TOKEN else "(비어있음)"
+    log(f"GitHub Pages 배포 시작 — 토큰: {token_hint}")
     try:
         html_path = os.path.join(BASE_DIR, 'us_market_screening_latest.html')
         if not os.path.exists(html_path):
@@ -539,7 +541,7 @@ def github_pages_deploy(archive_dates):
             err_detail = "\n".join(_upsert_err) if _upsert_err else "알 수 없는 오류"
             requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                data={"chat_id": CHAT_ID, "text": f"⚠️ GitHub Pages 업로드 실패\n{err_detail}"},
+                data={"chat_id": CHAT_ID, "text": f"⚠️ GitHub Pages 업로드 실패\n토큰: {token_hint}\n{err_detail}"},
                 timeout=10,
             )
 
