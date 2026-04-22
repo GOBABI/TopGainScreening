@@ -94,10 +94,37 @@ def _market_status():
     return 'closed'
 
 
+LOCK_FILE = os.path.join(BASE_DIR, ".screening_lock")
+
+def _acquire_screening_lock():
+    """10분 이내 중복 실행 방지 (인스턴스 간 공유)"""
+    import time as _time
+    try:
+        if os.path.exists(LOCK_FILE):
+            with open(LOCK_FILE) as f:
+                ts = float(f.read().strip())
+            if _time.time() - ts < 600:  # 10분
+                return False
+        with open(LOCK_FILE, "w") as f:
+            f.write(str(_time.time()))
+        return True
+    except Exception:
+        return True
+
+def _release_screening_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except Exception:
+        pass
+
+
 def run_screening(chat_id, sent_flags=None):
     global _screening_running
     if _screening_running:
         send_message(chat_id, "⚠️ 이미 스크리닝이 실행 중입니다. 완료 후 다시 시도하세요.")
+        return
+    if not _acquire_screening_lock():
+        send_message(chat_id, "⚠️ 10분 이내 이미 실행됐습니다. 잠시 후 다시 시도하세요.")
         return
 
     status = _market_status()
@@ -133,6 +160,7 @@ def run_screening(chat_id, sent_flags=None):
         send_message(chat_id, f"❌ 실행 오류: {e}")
     finally:
         _screening_running = False
+        _release_screening_lock()
 
 
 def _is_regular_market_open():
