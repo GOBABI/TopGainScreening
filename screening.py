@@ -32,10 +32,12 @@ TODAY      = _report_date()
 GITHUB_TOKEN   = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO    = "GOBABI/TopGainScreening"
 GITHUB_API     = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
+GITHUB_DATA_API = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
 GH_HEADERS     = {
     "Authorization": f"token {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3+json",
 }
+DATA_BRANCH      = "data"
 GITHUB_PAGES_URL = "https://gobabi.github.io/TopGainScreening"
 ARCHIVE_PATH     = os.path.join(BASE_DIR, 'archive.json')
 
@@ -402,33 +404,38 @@ def github_pull_watchlist():
     except Exception as e:
         log(f"GitHub pull 실패 (무시): {e}")
 
-def github_push_watchlist():
-    """watchlist.json을 GitHub에 업로드 (있으면 업데이트)."""
+def _gh_upsert_data(filename, content_str):
+    """data 브랜치에 파일 업로드 (watchlist.json, archive.json 전용)"""
     import base64
+    encoded = base64.b64encode(content_str.encode('utf-8')).decode('utf-8')
+    url = f"{GITHUB_API}/{filename}"
+    r = requests.get(url, headers=GH_HEADERS, params={"ref": DATA_BRANCH}, timeout=10)
+    sha = r.json().get('sha') if r.status_code == 200 else None
+    payload = {"message": f"{filename} update {TODAY}", "content": encoded, "branch": DATA_BRANCH}
+    if sha:
+        payload["sha"] = sha
+    r2 = requests.put(url, headers=GH_HEADERS, json=payload, timeout=15)
+    if r2.status_code not in (200, 201):
+        log(f"GitHub data push 실패 ({filename}): {r2.status_code} {r2.text[:80]}")
+
+def _gh_read_data(filename):
+    """data 브랜치에서 파일 읽기"""
+    import base64
+    r = requests.get(f"{GITHUB_API}/{filename}", headers=GH_HEADERS,
+                     params={"ref": DATA_BRANCH}, timeout=10)
+    if r.status_code == 200:
+        return base64.b64decode(r.json()['content']).decode('utf-8')
+    return None
+
+def github_push_watchlist():
+    """watchlist.json을 data 브랜치에 업로드"""
     try:
         with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
             content = f.read()
-        encoded = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-
-        # 기존 파일 SHA 조회 (업데이트 시 필요)
-        r = requests.get(f"{GITHUB_API}/watchlist.json", headers=GH_HEADERS, timeout=10)
-        sha = r.json().get('sha') if r.status_code == 200 else None
-
-        payload = {
-            "message": f"watchlist update {TODAY}",
-            "content": encoded,
-        }
-        if sha:
-            payload["sha"] = sha
-
-        r2 = requests.put(f"{GITHUB_API}/watchlist.json",
-                          headers=GH_HEADERS, json=payload, timeout=10)
-        if r2.status_code in (200, 201):
-            log("GitHub watchlist.json push 완료")
-        else:
-            log(f"GitHub push 실패: {r2.status_code} {r2.text[:100]}")
+        _gh_upsert_data("watchlist.json", content)
+        log("GitHub watchlist.json push 완료 (data 브랜치)")
     except Exception as e:
-        log(f"GitHub push 실패 (무시): {e}")
+        log(f"GitHub watchlist push 실패 (무시): {e}")
 
 def _is_after_market_close():
     """미국 ET 기준 정규장 마감(16:00) 이후인지 확인"""
@@ -440,18 +447,14 @@ def _is_after_market_close():
     return now.hour >= 16
 
 def load_archive_dates():
-    # GitHub에서 먼저 가져오기
-    import base64
     try:
-        r = requests.get(f"{GITHUB_API}/archive.json", headers=GH_HEADERS, timeout=10)
-        if r.status_code == 200:
-            content = base64.b64decode(r.json()['content']).decode('utf-8')
+        content = _gh_read_data("archive.json")
+        if content:
             with open(ARCHIVE_PATH, 'w') as f:
                 f.write(content)
-            log("GitHub archive.json pull 완료")
+            log("GitHub archive.json pull 완료 (data 브랜치)")
     except Exception as e:
         log(f"GitHub archive pull 실패 (무시): {e}")
-
     if os.path.exists(ARCHIVE_PATH):
         with open(ARCHIVE_PATH, 'r') as f:
             return json.load(f).get('dates', [])
@@ -460,19 +463,9 @@ def load_archive_dates():
 def save_archive_dates(dates):
     with open(ARCHIVE_PATH, 'w') as f:
         json.dump({'dates': dates}, f)
-    # GitHub에 동기화
-    import base64
     try:
-        with open(ARCHIVE_PATH, 'r') as f:
-            content = f.read()
-        encoded = base64.b64encode(content.encode()).decode()
-        r = requests.get(f"{GITHUB_API}/archive.json", headers=GH_HEADERS, timeout=10)
-        sha = r.json().get('sha') if r.status_code == 200 else None
-        payload = {"message": f"archive update {TODAY}", "content": encoded}
-        if sha:
-            payload["sha"] = sha
-        requests.put(f"{GITHUB_API}/archive.json", headers=GH_HEADERS, json=payload, timeout=10)
-        log("GitHub archive.json push 완료")
+        _gh_upsert_data("archive.json", json.dumps({'dates': dates}))
+        log("GitHub archive.json push 완료 (data 브랜치)")
     except Exception as e:
         log(f"GitHub archive push 실패 (무시): {e}")
 
@@ -563,6 +556,13 @@ def github_pages_deploy(archive_dates):
 
 # ── 관심종목 워치리스트 ────────────────────────────────────────────────
 def load_watchlist():
+    try:
+        content = _gh_read_data("watchlist.json")
+        if content:
+            with open(WATCHLIST_FILE, 'w', encoding='utf-8') as f:
+                f.write(content)
+    except Exception:
+        pass
     if os.path.exists(WATCHLIST_FILE):
         with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
