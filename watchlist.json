@@ -1,1 +1,61 @@
-{"tickers":{}}
+{
+  "tickers": {
+    "SEDG": {
+      "first_seen": "2026-04-23",
+      "last_seen": "2026-04-23",
+      "appearances": 1,
+      "last_price": 47.36,
+      "last_change_pct": 11.17,
+      "last_score": 5,
+      "last_ql_pos": "c",
+      "last_ql_desc": "일반 상승 구간",
+      "name": "SolarEdge Technologies, Inc.",
+      "sector": "Technology",
+      "industry": "Solar",
+      "exchange": "NMS",
+      "last_rsi": 47.2,
+      "last_adx": 17.5,
+      "last_macd_bull": false,
+      "last_52w_pct": 91.3,
+      "last_ytd": 51.0
+    },
+    "PENN": {
+      "first_seen": "2026-04-23",
+      "last_seen": "2026-04-23",
+      "appearances": 1,
+      "last_price": 17.26,
+      "last_change_pct": 16.86,
+      "last_score": 4,
+      "last_ql_pos": "c",
+      "last_ql_desc": "일반 상승 구간",
+      "name": "PENN Entertainment, Inc.",
+      "sector": "Consumer Cyclical",
+      "industry": "Resorts & Casinos",
+      "exchange": "NMS",
+      "last_rsi": 69.9,
+      "last_adx": 13.1,
+      "last_macd_bull": true,
+      "last_52w_pct": 84.3,
+      "last_ytd": 16.2
+    },
+    "APLD": {
+      "first_seen": "2026-04-23",
+      "last_seen": "2026-04-23",
+      "appearances": 1,
+      "last_price": 36.35,
+      "last_change_pct": 12.09,
+      "last_score": 1,
+      "last_ql_pos": "c",
+      "last_ql_desc": "일반 상승 구간",
+      "name": "Applied Digital Corporation",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NMS",
+      "last_rsi": 78.4,
+      "last_adx": 18.5,
+      "last_macd_bull": false,
+      "last_52w_pct": 87.9,
+      "last_ytd": 29.3
+    }
+  }
+}
