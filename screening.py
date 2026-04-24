@@ -561,11 +561,17 @@ def load_watchlist():
         if content:
             with open(WATCHLIST_FILE, 'w', encoding='utf-8') as f:
                 f.write(content)
-    except Exception:
-        pass
+            data = json.loads(content)
+            count = len(data.get('tickers', {}))
+            log(f"watchlist 로드 완료: {count}개 (data 브랜치)")
+        else:
+            log("watchlist data 브랜치 읽기 실패 — 로컬 파일 시도")
+    except Exception as e:
+        log(f"watchlist 로드 예외: {e}")
     if os.path.exists(WATCHLIST_FILE):
         with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
+    log("watchlist 파일 없음 — 빈 상태로 시작")
     return {"tickers": {}}
 
 def save_watchlist(wl):
