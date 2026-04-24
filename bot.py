@@ -118,17 +118,17 @@ def _release_screening_lock():
         pass
 
 
-def run_screening(chat_id, sent_flags=None):
+def run_screening(chat_id, sent_flags=None, force=False):
     global _screening_running
     if _screening_running:
         send_message(chat_id, "⚠️ 이미 스크리닝이 실행 중입니다. 완료 후 다시 시도하세요.")
         return
-    if not _acquire_screening_lock():
+    if not force and not _acquire_screening_lock():
         send_message(chat_id, "⚠️ 10분 이내 이미 실행됐습니다. 잠시 후 다시 시도하세요.")
         return
 
     status = _market_status()
-    if status == 'closed':
+    if not force and status == 'closed':
         send_message(chat_id, "📭 현재 미국 장이 열리지 않는 시간입니다 (주말 또는 심야).\n데이터가 없어 스크리닝을 실행할 수 없습니다.")
         return
 
@@ -506,6 +506,10 @@ def main():
             if text in ("/report", "/refresh") or text.startswith(("/report@", "/refresh@")):
                 print(f"[bot] /report 수신 (chat_id={chat_id})")
                 run_screening(chat_id, sent_flags)
+            elif text == "/force" or text.startswith("/force@"):
+                print(f"[bot] /force 수신 (chat_id={chat_id})")
+                send_message(chat_id, "⚡ 강제 실행 — 장 시간 조건 무시")
+                run_screening(chat_id, sent_flags, force=True)
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)
@@ -517,6 +521,7 @@ def main():
                     chat_id,
                     "안녕하세요!\n\n"
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
+                    "/force — 장 시간 무관하게 강제 스크리닝\n"
                     "/pre — 프리마켓 갭 상승 종목 스캔\n"
                     "/test — 서버 연결 및 데이터 진단\n\n"
                     "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
