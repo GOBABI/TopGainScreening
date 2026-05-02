@@ -614,6 +614,7 @@ def analyze_ticker(chat_id, ticker):
         lines.append("□ ORB: 9:35 이후 5분봉 고/저가 기록")
         lines.append("□ ORB 계산기로 수량·목표가 산출")
         lines.append("□ R:R 1:2 이상 확인")
+        lines.append("\n📖 <a href='https://gobabi.github.io/TopGainScreening/guide.html'>체크리스트 항목 해설 보기</a>")
 
         # 종합 판단
         bad = sum(1 for k, v in auto if v.startswith("❌"))
