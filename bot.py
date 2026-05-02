@@ -471,7 +471,169 @@ def run_test(chat_id):
     except Exception:
         return None
 
-def _load_offset():
+def analyze_ticker(chat_id, ticker):
+    import yfinance as yf
+    import pandas as pd
+    send_message(chat_id, f"🔍 {ticker} 분석 중...")
+    try:
+        t   = yf.Ticker(ticker)
+        h   = t.history(period="1y")
+        if h.empty or len(h) < 60:
+            send_message(chat_id, f"❌ {ticker} 데이터 없음 또는 부족")
+            return
+
+        info   = t.info
+        c      = h["Close"]
+        hi     = h["High"]
+        lo     = h["Low"]
+        vol    = h["Volume"]
+        price  = float(c.iloc[-1])
+        ma20   = float(c.rolling(20).mean().iloc[-1])
+        ma50   = float(c.rolling(50).mean().iloc[-1])
+        ma200  = float(c.rolling(200).mean().dropna().iloc[-1]) if len(c) >= 200 else None
+
+        # ADX 계산
+        def _adx(hi, lo, c, n=14):
+            tr  = pd.concat([hi - lo, (hi - c.shift()).abs(), (lo - c.shift()).abs()], axis=1).max(axis=1)
+            atr = tr.ewm(alpha=1/n, adjust=False).mean()
+            up  = hi.diff(); dn = -lo.diff()
+            pdm = up.where((up > dn) & (up > 0), 0.0)
+            ndm = dn.where((dn > up) & (dn > 0), 0.0)
+            pdi = 100 * pdm.ewm(alpha=1/n, adjust=False).mean() / atr
+            ndi = 100 * ndm.ewm(alpha=1/n, adjust=False).mean() / atr
+            dx  = (100 * (pdi - ndi).abs() / (pdi + ndi).replace(0, 1))
+            return float(dx.ewm(alpha=1/n, adjust=False).mean().iloc[-1])
+
+        # RSI 계산
+        def _rsi(c, n=14):
+            d   = c.diff()
+            g   = d.where(d > 0, 0.0).ewm(alpha=1/n, adjust=False).mean()
+            ls  = (-d.where(d < 0, 0.0)).ewm(alpha=1/n, adjust=False).mean()
+            return float(100 - 100 / (1 + g / ls.replace(0, 1e-9)).iloc[-1])
+
+        adx  = _adx(hi, lo, c)
+        rsi  = _rsi(c)
+        avg_vol = float(vol.tail(20).mean())
+
+        # SPY / QQQ
+        spy_h = yf.Ticker("SPY").history(period="5d")["Close"]
+        qqq_h = yf.Ticker("QQQ").history(period="5d")["Close"]
+        spy_chg = (spy_h.iloc[-1] / spy_h.iloc[-2] - 1) * 100
+        qqq_chg = (qqq_h.iloc[-1] / qqq_h.iloc[-2] - 1) * 100
+
+        # 섹터 ETF
+        sector = info.get("sector", "")
+        SECTOR_ETF = {
+            "Technology": "XLK", "Healthcare": "XLV", "Financial Services": "XLF",
+            "Energy": "XLE", "Consumer Cyclical": "XLY", "Industrials": "XLI",
+            "Communication Services": "XLC", "Basic Materials": "XLB",
+            "Consumer Defensive": "XLP", "Real Estate": "XLRE", "Utilities": "XLU",
+        }
+        etf = SECTOR_ETF.get(sector)
+        sector_chg = None
+        if etf:
+            sh = yf.Ticker(etf).history(period="5d")["Close"]
+            sector_chg = (sh.iloc[-1] / sh.iloc[-2] - 1) * 100
+
+        # 눌림 거래량 감소 (최근 5일 거래량 vs 20일 평균)
+        recent_vol  = float(vol.tail(5).mean())
+        vol_decl    = recent_vol < avg_vol * 0.85
+
+        # MA 눌림 여부 (현재가 MA20 또는 MA50의 ±3% 이내)
+        near_ma20 = abs(price - ma20) / ma20 < 0.03
+        near_ma50 = abs(price - ma50) / ma50 < 0.03
+        ma_riding = near_ma20 or near_ma50
+
+        # 어닝
+        earning_warn = False
+        earning_str  = "확인 불가"
+        try:
+            cal = t.calendar
+            if cal is not None and not cal.empty:
+                from datetime import datetime
+                eq = cal.get("Earnings Date")
+                if eq is not None and len(eq) > 0:
+                    ed = pd.Timestamp(eq[0]).date()
+                    days_to = (ed - datetime.now().date()).days
+                    earning_str = str(ed)
+                    if 0 <= days_to <= 3:
+                        earning_warn = True
+                        earning_str += f" ({days_to}일 후 ⚠️)"
+        except Exception:
+            pass
+
+        name = info.get("shortName", ticker)
+
+        # ── 자동 체크 결과 ────────────────────────────────
+        auto = []
+
+        # 시장
+        spy_ok = spy_chg > 0
+        qqq_ok = qqq_chg > 0
+        auto.append(("SPY", f"{'✅' if spy_ok else '❌'} SPY {spy_chg:+.1f}%"))
+        auto.append(("QQQ", f"{'✅' if qqq_ok else '❌'} QQQ {qqq_chg:+.1f}%"))
+        if sector_chg is not None:
+            auto.append(("섹터", f"{'✅' if sector_chg > 0 else '❌'} {sector}({etf}) {sector_chg:+.1f}%"))
+        else:
+            auto.append(("섹터", f"⚠️ 섹터 ETF 확인 불가 ({sector or '미분류'})"))
+
+        # 기본 조건
+        if ma200:
+            auto.append(("200MA", f"{'✅' if price > ma200 else '❌'} 200MA {'위' if price > ma200 else '아래'} (${price:.2f} / MA200 ${ma200:.2f})"))
+            ma_align = ma20 > ma50 > ma200
+            auto.append(("정배열", f"{'✅' if ma_align else '❌'} MA 정배열 (20:{ma20:.1f} > 50:{ma50:.1f} > 200:{ma200:.1f})"))
+        else:
+            auto.append(("200MA", "⚠️ 데이터 부족 (1년 미만)"))
+            auto.append(("정배열", "⚠️ 데이터 부족"))
+
+        auto.append(("ADX",  f"{'✅' if adx >= 25 else '❌'} ADX {adx:.0f} ({'뚜렷한 추세' if adx >= 25 else '추세 약함'})"))
+        auto.append(("거래량", f"{'✅' if avg_vol >= 500000 else '❌'} 평균 거래량 {avg_vol/1e6:.1f}M주"))
+        auto.append(("주가",  f"{'✅' if price >= 5 else '❌'} 주가 ${price:.2f}"))
+
+        # 패턴
+        ma_str = []
+        if near_ma20: ma_str.append(f"20MA(${ma20:.1f})")
+        if near_ma50: ma_str.append(f"50MA(${ma50:.1f})")
+        auto.append(("MA눌림", f"{'✅' if ma_riding else '⚠️'} MA 눌림 {'근처 — 반등 확인 필요' if ma_riding else '없음 (' + ', '.join(ma_str) + ')' if ma_str else '없음'}"))
+        auto.append(("눌림거래량", f"{'✅' if vol_decl else '⚠️'} 눌림 거래량 {'감소 (정상)' if vol_decl else '감소 없음 — 주의'}"))
+
+        # 위험 신호
+        auto.append(("어닝",  f"{'❌ 어닝 임박!' if earning_warn else '✅ 어닝'} {earning_str}"))
+        auto.append(("RSI",   f"{'❌' if rsi >= 75 else '⚠️' if rsi >= 65 else '✅'} RSI {rsi:.0f} {'— 과매수 위험' if rsi >= 75 else '— 과열 근접' if rsi >= 65 else ''}"))
+
+        # ── 결과 조합 ──────────────────────────────────────
+        lines = [f"<b>📊 ${ticker} — {name}</b>\n"]
+        lines.append("━━ 🤖 자동 체크 ━━")
+        for _, v in auto:
+            lines.append(v)
+
+        lines.append("\n━━ 👁 직접 확인 필요 ━━")
+        lines.append("□ FOMC/경제지표 오늘 없는지")
+        lines.append("□ VCP / C&H / HTF 패턴 차트 확인")
+        lines.append("□ LREP 소형캔들 밀집 구간 확인")
+        lines.append("□ ORB: 9:35 이후 5분봉 고/저가 기록")
+        lines.append("□ ORB 계산기로 수량·목표가 산출")
+        lines.append("□ R:R 1:2 이상 확인")
+
+        # 종합 판단
+        bad = sum(1 for k, v in auto if v.startswith("❌"))
+        warn = sum(1 for k, v in auto if v.startswith("⚠️"))
+        if bad == 0 and warn <= 1:
+            verdict = "\n🟢 조건 양호 — 패턴·ORB 확인 후 진입 판단"
+        elif bad <= 1:
+            verdict = f"\n🟡 주의 조건 {bad}개 — 신중하게 접근"
+        else:
+            verdict = f"\n🔴 부적합 조건 {bad}개 — 진입 재고"
+        lines.append(verdict)
+
+        send_message(chat_id, "\n".join(lines))
+        print(f"[bot] /${ticker} 분석 완료")
+
+    except Exception as e:
+        send_message(chat_id, f"❌ {ticker} 분석 오류: {e}")
+
+
+
     try:
         with open(OFFSET_FILE) as f:
             return int(f.read().strip())
@@ -523,9 +685,15 @@ def main():
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
                     "/force — 장 시간 무관하게 강제 스크리닝\n"
                     "/pre — 프리마켓 갭 상승 종목 스캔\n"
-                    "/test — 서버 연결 및 데이터 진단\n\n"
+                    "/test — 서버 연결 및 데이터 진단\n"
+                    "/$티커 — 종목 체크리스트 분석 (예: /NVDA)\n\n"
                     "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
                 )
+            elif text.startswith("/") and len(text) > 1:
+                potential = text[1:].split("@")[0].upper().strip()
+                if potential.isalpha() and 1 <= len(potential) <= 6:
+                    print(f"[bot] /{potential} 티커 분석 수신 (chat_id={chat_id})")
+                    analyze_ticker(chat_id, potential)
 
         _auto_schedule(sent_flags)
         time.sleep(30)
