@@ -5,7 +5,8 @@ v6 — 경로 고정 / API 호환성 개선 / 버그 수정
 """
 
 import sys, os, json, warnings, requests
-from datetime import datetime
+from html_report import build_html, send_telegram_html
+from datetime import datetime, timedelta
 warnings.filterwarnings('ignore')
 
 # ── 경로 설정 (환경에 관계없이 고정) ──────────────────────────────────
@@ -465,6 +466,23 @@ def watch_status(days, appearances, ql_pos):
     else:
         return f"{days}일차 — 재평가 필요", "red"
 
+def _is_reentry(last_seen_str):
+    """목록에서 1거래일 이상 빠졌다가 재등장하는지 감지"""
+    try:
+        last = datetime.strptime(last_seen_str, '%Y-%m-%d').date()
+        today = datetime.strptime(TODAY, '%Y-%m-%d').date()
+        if today <= last:
+            return False
+        gap = 0
+        cur = last + timedelta(days=1)
+        while cur <= today:
+            if cur.weekday() < 5:
+                gap += 1
+            cur += timedelta(days=1)
+        return gap > 1
+    except Exception:
+        return False
+
 def update_watchlist(passed):
     wl = load_watchlist()
     tickers = wl.get("tickers", {})
@@ -473,10 +491,14 @@ def update_watchlist(passed):
         tk = s['ticker']
         if tk in tickers:
             e = tickers[tk]
+            if _is_reentry(e.get('last_seen', TODAY)):
+                log(f"  재진입 감지 [{tk}]: first_seen 리셋 ({e.get('last_seen')} → {TODAY})")
+                e['first_seen']  = TODAY
+                e['appearances'] = 1
+            elif e.get('last_seen') != TODAY:
+                e['appearances'] = e.get('appearances', 1) + 1
+            e['last_seen']       = TODAY
             e['last_price']      = s['price']
-            if e.get('last_seen') != TODAY:
-                e['last_seen']    = TODAY
-                e['appearances'] += 1
             e['last_change_pct'] = s['change_pct']
             e['last_score']      = s['score']
             e['last_ql_pos']     = s['ql_pos']
