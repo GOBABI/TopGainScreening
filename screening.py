@@ -6,7 +6,7 @@ v6 — 경로 고정 / API 호환성 개선 / 버그 수정
 
 import sys, os, json, warnings, requests
 from html_report import build_html, send_telegram_html
-from datetime import datetime
+from datetime import datetime, timedelta
 warnings.filterwarnings('ignore')
 
 # ── 경로 설정 (환경에 관계없이 고정) ──────────────────────────────────
@@ -274,37 +274,49 @@ def analyze(ticker):
     ql_pos, ql_desc = qullamaggie_position(price, ma200v, high52, ytd)
 
     vol_trend = 'N/A'
+    vol_contraction = False
     if len(h) >= 20:
         avg_vol_20 = float(h['Volume'][-20:].mean())
         avg_vol_5  = float(h['Volume'][-5:].mean())
         vol_trend  = '증가' if avg_vol_5 > avg_vol_20 * 1.2 else ('감소' if avg_vol_5 < avg_vol_20 * 0.8 else '보합')
 
+        # 거래량 수축 체크: 20일을 4구간으로 나눠 최근으로 올수록 줄어드는지 확인
+        vols = h['Volume'][-20:].values
+        q1 = vols[:5].mean()    # 15~20일 전
+        q2 = vols[5:10].mean()  # 10~15일 전
+        q3 = vols[10:15].mean() # 5~10일 전
+        q4 = vols[15:].mean()   # 최근 5일
+        # 최근 5일이 이전보다 줄고 있거나, 20일 평균 대비 30% 이상 감소
+        vol_contraction = bool((q4 < q3 and q3 < q2) or (q4 < q1 * 0.7))
+
     return {
-        '200ma':       round(ma200v, 2),
-        'above_200ma': bool(price > ma200v),
-        'rsi':         round(rsi, 1),
-        'adx':         round(adx, 1),
-        'macd_bull':   bool(macd_bull),
-        '52w_pct':     pct52,
-        '52w_high':    round(high52, 2),
-        'ytd':         ytd,
-        'adr':         adr,
-        'ql_pos':      ql_pos,      # str: 'a' | 'b' | 'c'
-        'ql_desc':     ql_desc,     # str
-        'vol_trend':   vol_trend,
+        '200ma':          round(ma200v, 2),
+        'above_200ma':    bool(price > ma200v),
+        'rsi':            round(rsi, 1),
+        'adx':            round(adx, 1),
+        'macd_bull':      bool(macd_bull),
+        '52w_pct':        pct52,
+        '52w_high':       round(high52, 2),
+        'ytd':            ytd,
+        'adr':            adr,
+        'ql_pos':         ql_pos,
+        'ql_desc':        ql_desc,
+        'vol_trend':      vol_trend,
+        'vol_contraction': vol_contraction,
     }
 
 AI_SECTORS = {'technology','semiconductor','defense','energy','aerospace'}
 
 def score_stock(ta, sector, industry):
     s = 0
-    if ta['adx'] > 25:            s += 2
-    if 40 <= ta['rsi'] <= 75:     s += 2
-    if ta['macd_bull']:            s += 2
-    if ta['52w_pct'] >= 90:       s += 1
-    if ta['ytd'] >= 50:            s += 1
+    if ta['adx'] > 25:                          s += 2
+    if 40 <= ta['rsi'] <= 75:                   s += 2
+    if ta['macd_bull']:                          s += 2
+    if ta['52w_pct'] >= 90:                     s += 1
+    if ta['ytd'] >= 50:                          s += 1
+    if ta.get('vol_contraction') and ta['ql_pos'] == 'b':  s += 2  # VCP 조건 충족
     combo = (sector + industry).lower()
-    if any(k in combo for k in AI_SECTORS): s += 1
+    if any(k in combo for k in AI_SECTORS):     s += 1
     return s
 
 def auto_risks(ta, detail):
@@ -320,6 +332,8 @@ def auto_risks(ta, detail):
         risks.append("YTD 100%↑ 급등주 — 차익실현 매물 출회 주의")
     if not ta['macd_bull']:
         risks.append("MACD 아직 매수신호 미발생 — 타이밍 추가 확인 권장")
+    if ta['ql_pos'] == 'b' and not ta.get('vol_contraction'):
+        risks.append("b 구간이나 거래량 수축 미확인 — 베이스 품질 재점검 필요")
     beta = detail.get('beta') or 0
     if beta and beta > 2:
         risks.append(f"Beta {beta:.1f} — 시장 변동 시 과대 반응 가능")
@@ -599,6 +613,23 @@ def watch_status(days, appearances, ql_pos):
     else:
         return f"{days}일차 — 재평가 필요", "red"
 
+def _is_reentry(last_seen_str):
+    """목록에서 1거래일 이상 빠졌다가 재등장하는지 감지"""
+    try:
+        last = datetime.strptime(last_seen_str, '%Y-%m-%d').date()
+        today = datetime.strptime(TODAY, '%Y-%m-%d').date()
+        if today <= last:
+            return False
+        gap = 0
+        cur = last + timedelta(days=1)
+        while cur <= today:
+            if cur.weekday() < 5:
+                gap += 1
+            cur += timedelta(days=1)
+        return gap > 1
+    except Exception:
+        return False
+
 def update_watchlist(passed):
     wl = load_watchlist()
     tickers = wl.get("tickers", {})
@@ -614,7 +645,11 @@ def update_watchlist(passed):
         }
         if tk in tickers:
             e = tickers[tk]
-            if e.get('last_seen') != TODAY:
+            if _is_reentry(e.get('last_seen', TODAY)):
+                log(f"  재진입 감지 [{tk}]: first_seen 리셋 ({e.get('last_seen')} → {TODAY})")
+                e['first_seen']  = TODAY
+                e['appearances'] = 1
+            elif e.get('last_seen') != TODAY:
                 e['appearances'] = e.get('appearances', 1) + 1
             e['last_seen']       = TODAY
             e['last_price']      = s['price']
@@ -796,7 +831,7 @@ def build_narrative(passed, mkt):
 
     return "\n".join(lines)
 
-def send_telegram_narrative(text):
+def _send_one_message(text):
     import time
     for attempt in range(3):
         try:
@@ -806,14 +841,39 @@ def send_telegram_narrative(text):
                 timeout=30
             )
             if r.ok and r.json().get('ok'):
-                log("텔레그램 내러티브 전송 완료")
                 return
-            else:
-                log(f"텔레그램 메시지 재시도 {attempt+1}: {r.text[:100]}")
+            log(f"텔레그램 메시지 재시도 {attempt+1}: {r.text[:200]}")
         except Exception as e:
             log(f"텔레그램 메시지 재시도 {attempt+1}: {e}")
         time.sleep(5)
     raise RuntimeError("텔레그램 메시지 3회 실패")
+
+def send_telegram_narrative(text):
+    import time
+    LIMIT = 4000
+    if len(text) <= LIMIT:
+        _send_one_message(text)
+        log("텔레그램 내러티브 전송 완료")
+        return
+
+    # 줄 단위로 4000자 이하 청크로 분할
+    chunks, buf = [], ""
+    for line in text.split("\n"):
+        candidate = buf + line + "\n"
+        if len(candidate) > LIMIT:
+            if buf:
+                chunks.append(buf.rstrip("\n"))
+            buf = line + "\n"
+        else:
+            buf = candidate
+    if buf:
+        chunks.append(buf.rstrip("\n"))
+
+    for i, chunk in enumerate(chunks, 1):
+        _send_one_message(chunk)
+        log(f"텔레그램 내러티브 전송 완료 ({i}/{len(chunks)})")
+        if i < len(chunks):
+            time.sleep(1)
 
 # ── 메인 ─────────────────────────────────────────────────────────────
 def main():
