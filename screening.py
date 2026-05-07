@@ -1136,7 +1136,7 @@ def build_narrative(passed, mkt):
 
     return "\n".join(lines)
 
-def send_telegram_narrative(text):
+def _send_one_message(text):
     import time
     for attempt in range(3):
         try:
@@ -1146,14 +1146,39 @@ def send_telegram_narrative(text):
                 timeout=30
             )
             if r.ok and r.json().get('ok'):
-                log("텔레그램 내러티브 전송 완료")
                 return
-            else:
-                log(f"텔레그램 메시지 재시도 {attempt+1}: {r.text[:100]}")
+            log(f"텔레그램 메시지 재시도 {attempt+1}: {r.text[:200]}")
         except Exception as e:
             log(f"텔레그램 메시지 재시도 {attempt+1}: {e}")
         time.sleep(5)
     raise RuntimeError("텔레그램 메시지 3회 실패")
+
+def send_telegram_narrative(text):
+    import time
+    LIMIT = 4000
+    if len(text) <= LIMIT:
+        _send_one_message(text)
+        log("텔레그램 내러티브 전송 완료")
+        return
+
+    # 줄 단위로 4000자 이하 청크로 분할
+    chunks, buf = [], ""
+    for line in text.split("\n"):
+        candidate = buf + line + "\n"
+        if len(candidate) > LIMIT:
+            if buf:
+                chunks.append(buf.rstrip("\n"))
+            buf = line + "\n"
+        else:
+            buf = candidate
+    if buf:
+        chunks.append(buf.rstrip("\n"))
+
+    for i, chunk in enumerate(chunks, 1):
+        _send_one_message(chunk)
+        log(f"텔레그램 내러티브 전송 완료 ({i}/{len(chunks)})")
+        if i < len(chunks):
+            time.sleep(1)
 
 # ── 메인 ─────────────────────────────────────────────────────────────
 def main():
