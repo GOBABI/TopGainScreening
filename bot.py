@@ -423,6 +423,96 @@ def _auto_schedule(sent_flags: dict):
         scan_premarket(CHAT_ID)
         sent_flags["pre"] = today
 
+    _check_orb_alerts(sent_flags)
+
+
+_ORB_CHECK_INTERVAL = 120  # seconds
+
+
+def _check_orb_alerts(sent_flags: dict):
+    """9:35~10:30 ET, /pre 종목 대상 5분봉 ORB 돌파 감지 및 텔레그램 알림.
+    2분 간격으로 체크하고 종목당 하루 1회만 전송."""
+    import pytz
+    import time as _time
+    from datetime import datetime, time as dtime
+    import yfinance as yf
+
+    et = pytz.timezone("America/New_York")
+    now = datetime.now(et)
+
+    if now.weekday() >= 5:
+        return
+    hm = now.hour * 100 + now.minute
+    if not (935 <= hm <= 1030):
+        return
+
+    if _time.time() - sent_flags.get("orb_last_check", 0) < _ORB_CHECK_INTERVAL:
+        return
+    sent_flags["orb_last_check"] = _time.time()
+
+    today = now.strftime("%Y-%m-%d")
+
+    if not os.path.exists(PRE_RESULT_FILE):
+        return
+    try:
+        with open(PRE_RESULT_FILE) as f:
+            pre_data = json.load(f)
+    except Exception:
+        return
+    if pre_data.get("date") != today:
+        return
+
+    symbols = pre_data.get("symbols", [])
+    if not symbols:
+        return
+
+    # 날짜가 바뀌면 알림 기록 초기화
+    if sent_flags.get("orb_alerted_date") != today:
+        sent_flags["orb_alerted"] = {}
+        sent_flags["orb_alerted_date"] = today
+    orb_alerted = sent_flags["orb_alerted"]
+
+    unalerted = [s for s in symbols if s not in orb_alerted]
+    if not unalerted:
+        return
+
+    print(f"[bot] ORB 체크: {unalerted}")
+
+    for sym in unalerted:
+        try:
+            h5 = yf.Ticker(sym).history(period="1d", interval="5m")
+            if h5.empty or len(h5) < 2:
+                continue
+            h5.index = h5.index.tz_convert(et)
+
+            orb_rows = h5[h5.index.time >= dtime(9, 30)]
+            if orb_rows.empty:
+                continue
+
+            orb_high = float(orb_rows.iloc[0]["High"])
+            orb_low  = float(orb_rows.iloc[0]["Low"])
+            current  = float(h5["Close"].iloc[-1])
+
+            if current <= orb_high:
+                continue
+
+            breakout_pct = (current - orb_high) / orb_high * 100
+            orb_vol  = float(orb_rows.iloc[0]["Volume"])
+            last_vol = float(h5["Volume"].iloc[-1])
+            vol_tag  = f"\n  거래량 {last_vol / orb_vol:.1f}x (ORB 대비) 🔥" if orb_vol > 0 else ""
+
+            send_message(CHAT_ID, (
+                f"🚨 <b>ORB 돌파: {sym}</b>\n"
+                f"  현재가 <b>${current:.2f}</b>  (+{breakout_pct:.1f}% vs ORB 고가)\n"
+                f"  ORB 고: ${orb_high:.2f} / 저: ${orb_low:.2f}\n"
+                f"  손절 참고선: ${orb_low:.2f}{vol_tag}"
+            ))
+            orb_alerted[sym] = True
+            print(f"[bot] ORB 돌파 알림: {sym} ${current:.2f}")
+
+        except Exception as e:
+            print(f"[bot] ORB 체크 오류 {sym}: {e}")
+
 
 def run_test(chat_id):
     send_message(chat_id, "🔧 진단 테스트 시작...")
