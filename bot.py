@@ -426,7 +426,7 @@ def _auto_schedule(sent_flags: dict):
     _check_orb_alerts(sent_flags)
 
 
-_ORB_CHECK_INTERVAL = 120  # seconds
+_ORB_CHECK_INTERVAL = 300  # seconds (5분 간격)
 
 
 def _check_orb_alerts(sent_flags: dict):
