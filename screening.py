@@ -78,8 +78,16 @@ def korean_desc(detail, ta, q):
     industry = detail.get('industry', '')
     s_ko     = SECTOR_KO.get(sector, sector)
     i_ko     = INDUSTRY_KO.get(industry, industry)
-    rev_g    = detail.get('revenueGrowth') or 0
-    pe_fwd   = detail.get('forwardPE') or 0
+    _rev_g   = detail.get('revenueGrowth')
+    try:
+        rev_g = float(_rev_g) if _rev_g is not None else 0
+    except (ValueError, TypeError):
+        rev_g = 0
+    _pe      = detail.get('forwardPE')
+    try:
+        pe_fwd = float(_pe) if _pe is not None else 0
+    except (ValueError, TypeError):
+        pe_fwd = 0
     analysts = detail.get('numberOfAnalystOpinions') or 0
     rec      = detail.get('recommendationKey', '')
     rec_ko   = {'strong_buy':'강력매수','buy':'매수','hold':'보유'}.get(rec,'')
