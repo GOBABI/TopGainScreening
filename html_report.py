@@ -8,6 +8,12 @@ send_telegram_html(passed, mkt)  →  텔레그램 전송
 import os, json, requests
 from datetime import datetime
 
+def _safe_float(v, default=0.0):
+    try:
+        return float(v) if v is not None else default
+    except (ValueError, TypeError):
+        return default
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_OUT  = os.path.join(BASE_DIR, 'us_market_screening_latest.html')
 TODAY     = datetime.now().strftime('%Y-%m-%d')
@@ -81,10 +87,10 @@ def _build_data_json(passed, mkt, wl):
             'above_200ma':   bool(s.get('above_200ma', False)),
             'vol_ratio':     round(s.get('vol_ratio', 0), 1),
             'vol_trend':     s.get('vol_trend', ''),
-            'pe_forward':    round(s.get('pe_forward') or 0, 1),
+            'pe_forward':    round(_safe_float(s.get('pe_forward')), 1),
             'rev_growth':    s.get('rev_growth'),
             'analyst_rec':   s.get('analyst_rec', ''),
-            'analyst_target': round(s.get('analyst_target') or 0, 2),
+            'analyst_target': round(_safe_float(s.get('analyst_target')), 2),
             'catalysts':     (s.get('catalysts') or [])[:3],
             'risks':         (s.get('risks') or []),
             'summary':       (s.get('korean_desc') or s.get('summary') or '')[:300],
