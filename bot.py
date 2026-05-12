@@ -163,6 +163,31 @@ def run_screening(chat_id, sent_flags=None, force=False):
         _release_screening_lock()
 
 
+def run_screening_kr(chat_id):
+    global _screening_running
+    if _screening_running:
+        send_message(chat_id, "⚠️ 이미 스크리닝이 실행 중입니다. 완료 후 다시 시도하세요.")
+        return
+    _screening_running = True
+    try:
+        send_message(chat_id, "🔄 한국 시장(KRX) 스크리닝 중입니다...")
+        result = subprocess.run(
+            [sys.executable, os.path.join(BASE_DIR, "screening_kr.py")],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode == 0:
+            send_message(chat_id, "✅ KRX 스크리닝 완료 — 리포트가 전송되었습니다.")
+        else:
+            err = (result.stderr or result.stdout)[-500:]
+            send_message(chat_id, f"❌ KRX 스크리닝 오류\n{err}")
+    except subprocess.TimeoutExpired:
+        send_message(chat_id, "⚠️ 타임아웃: KRX 스크리닝이 5분을 초과했습니다.")
+    except Exception as e:
+        send_message(chat_id, f"❌ 실행 오류: {e}")
+    finally:
+        _screening_running = False
+
+
 def _is_regular_market_open():
     from datetime import datetime
     import pytz
@@ -370,6 +395,94 @@ def scan_premarket(chat_id):
     print(f"[bot] /pre 완료 — {len(results)}개 종목 전송")
 
 
+
+
+KR_DEFAULT_SYMBOLS = [
+    "005930.KS", "000660.KS", "035420.KS", "035720.KS",
+    "051910.KS", "006400.KS", "207940.KS", "005380.KS",
+    "068270.KS", "028260.KS",
+]
+
+def _is_kr_regular_open():
+    from datetime import datetime, time as dtime
+    import pytz
+    kst = pytz.timezone("Asia/Seoul")
+    now = datetime.now(kst)
+    if now.weekday() >= 5:
+        return False
+    return dtime(9, 0) <= now.time() <= dtime(15, 30)
+
+def scan_premarket_kr(chat_id):
+    import yfinance as yf
+    regular_open = _is_kr_regular_open()
+    mode_label = "한국 장중" if regular_open else "한국 프리마켓"
+    send_message(chat_id, f"⏳ {mode_label} 갭 스캔 중...")
+
+    results = []
+
+    if regular_open:
+        try:
+            quotes = yf.screen("most_actives", count=200).get("quotes", [])
+        except Exception:
+            quotes = []
+        for q in quotes:
+            sym = q.get("symbol", "")
+            if not (sym.endswith(".KS") or sym.endswith(".KQ")):
+                continue
+            try:
+                reg_open  = q.get("regularMarketOpen") or 0
+                reg_close = q.get("regularMarketPreviousClose") or 0
+                if reg_open <= 0 or reg_close <= 0:
+                    continue
+                gap_pct = (reg_open - reg_close) / reg_close * 100
+                if gap_pct >= 3.0:
+                    results.append({
+                        "sym": sym, "name": q.get("shortName") or sym,
+                        "gap": gap_pct, "price": reg_open,
+                        "market_cap": q.get("marketCap") or 0,
+                    })
+            except Exception:
+                continue
+    else:
+        symbols = list(KR_DEFAULT_SYMBOLS)
+        if os.path.exists(os.path.join(BASE_DIR, "watchlist_kr.json")):
+            try:
+                wl = json.load(open(os.path.join(BASE_DIR, "watchlist_kr.json")))
+                symbols = list(set(symbols + list(wl.get("tickers", {}).keys())))
+            except Exception:
+                pass
+        for sym in symbols:
+            try:
+                info      = yf.Ticker(sym).info
+                pre_price = info.get("preMarketPrice") or 0
+                reg_close = info.get("regularMarketPreviousClose") or 0
+                if pre_price <= 0 or reg_close <= 0:
+                    continue
+                gap_pct = (pre_price - reg_close) / reg_close * 100
+                if gap_pct >= 3.0:
+                    results.append({
+                        "sym": sym, "name": info.get("shortName", sym),
+                        "gap": gap_pct, "price": pre_price,
+                        "market_cap": info.get("marketCap") or 0,
+                    })
+            except Exception:
+                continue
+
+    if not results:
+        send_message(chat_id, f"📭 {mode_label} 갭 +3% 이상 한국 종목이 없습니다.")
+        return
+
+    results.sort(key=lambda x: x["market_cap"], reverse=True)
+    results = results[:10]
+
+    lines = [f"<b>📈 {mode_label} 갭 상승 종목 (시총 상위 10)</b>\n"]
+    for r in results:
+        lines.append(
+            f"<b>{r['sym']}</b> ({r['name']})\n"
+            f"  갭 +{r['gap']:.1f}%  현재 ₩{int(r['price']):,}"
+        )
+    send_message(chat_id, "\n\n".join(lines))
+    print(f"[bot] /prekr 완료 — {len(results)}개 종목 전송")
 
 
 def run_refresh(chat_id):
@@ -773,6 +886,12 @@ def main():
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)
+            elif text == "/kr" or text.startswith("/kr@"):
+                print(f"[bot] /kr 수신 (chat_id={chat_id})")
+                run_screening_kr(chat_id)
+            elif text == "/prekr" or text.startswith("/prekr@"):
+                print(f"[bot] /prekr 수신 (chat_id={chat_id})")
+                scan_premarket_kr(chat_id)
             elif text == "/test" or text.startswith("/test@"):
                 print(f"[bot] /test 수신 (chat_id={chat_id})")
                 run_test(chat_id)
@@ -782,10 +901,13 @@ def main():
                     "안녕하세요!\n\n"
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
                     "/force — 장 시간 무관하게 강제 스크리닝\n"
-                    "/pre — 프리마켓 갭 상승 종목 스캔\n"
+                    "/pre — 미국 프리마켓 갭 상승 종목 스캔\n"
+                    "/kr — 한국 주식(KRX) 스크리닝 리포트 생성 및 전송\n"
+                    "/prekr — 한국 주식 갭 스캔 (장중/프리마켓)\n"
                     "/test — 서버 연결 및 데이터 진단\n"
                     "/$티커 — 종목 체크리스트 분석 (예: /NVDA)\n\n"
-                    "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
+                    "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre\n"
+                    "🇰🇷 한국장: /kr, /prekr 은 수동 실행 전용"
                 )
             elif text.startswith("/") and len(text) > 1:
                 potential = text[1:].split("@")[0].upper().strip()
