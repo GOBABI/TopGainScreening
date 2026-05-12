@@ -96,7 +96,10 @@ def _build_data_json(passed, mkt, wl, currency='USD'):
             'summary':       (s.get('korean_desc') or s.get('summary') or '')[:300],
         })
 
-    market_keys = ['spy', 'qqq', 'vix', 'smh', 'xlk', 'xlv', 'xle', 'xli']
+    if currency == 'KRW':
+        market_keys = ['kospi', 'kosdaq', 'ks200']
+    else:
+        market_keys = ['spy', 'qqq', 'vix', 'smh', 'xlk', 'xlv', 'xle', 'xli']
     market_out = {k: mkt.get(k, {'price': 0, 'chg': 0, 'week': 0}) for k in market_keys}
 
     return json.dumps({
@@ -115,7 +118,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>US Top Gainers Screening — __DATE__</title>
+<title>__MARKET_TITLE__ Screening — __DATE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -223,7 +226,7 @@ const SectorBar = ({ mkt }) => {
   return (
     <div style={{ display: 'flex', background: C.panel2, borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       {sectors.map(({ key, label }) => {
-        const d = mkt[key]; const pos = d.chg >= 0;
+        const d = mkt[key] || { chg: 0 }; const pos = d.chg >= 0;
         return (
           <div key={key} style={{ flex: 1, padding: '10px 8px', textAlign: 'center', borderRight: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.lgray, marginBottom: 2 }}>{label}</div>
@@ -236,7 +239,29 @@ const SectorBar = ({ mkt }) => {
 };
 
 const MarketSection = ({ mkt }) => {
-  const spy = mkt.spy; const qqq = mkt.qqq;
+  if (CURRENCY === 'KRW') {
+    const kospi = mkt.kospi || { price: 0, chg: 0, week: 0 };
+    const kosdaq = mkt.kosdaq || { price: 0, chg: 0, week: 0 };
+    const ks200 = mkt.ks200 || { price: 0, chg: 0, week: 0 };
+    const status = (kospi.chg > 0.5 && kosdaq.chg > 0.5) ? '강세' : (kospi.chg < -0.5 && kosdaq.chg < -0.5) ? '약세' : '혼조';
+    const statusCol = status === '강세' ? C.green : status === '약세' ? C.red : C.gold;
+    return (
+      <section style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <span style={{ fontSize: 11, color: C.lgray, fontWeight: 500, letterSpacing: '0.1em' }}>01 / 시장 현황</span>
+          <div style={{ flex: 1, height: 1, background: C.border }} />
+          <Badge label={`${status} 마감`} color={statusCol} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <IndexCard label="KOSPI" data={kospi} />
+          <IndexCard label="KOSDAQ" data={kosdaq} />
+          <IndexCard label="KOSPI 200" data={ks200} />
+        </div>
+      </section>
+    );
+  }
+  const spy = mkt.spy || { price: 0, chg: 0, week: 0 };
+  const qqq = mkt.qqq || { price: 0, chg: 0, week: 0 };
   const status = (spy.chg > 0.5 && qqq.chg > 0.5) ? '강세' : (spy.chg < -0.5 && qqq.chg < -0.5) ? '약세' : '혼조';
   const statusCol = status === '강세' ? C.green : status === '약세' ? C.red : C.gold;
   return (
@@ -576,16 +601,19 @@ const WatchlistSection = ({ watchlist, today }) => {
 function App() {
   const [expanded, setExpanded] = React.useState({});
   const toggle = (tk) => setExpanded(prev => ({ ...prev, [tk]: !prev[tk] }));
-  const mkt = DATA.market; const spy = mkt.spy; const qqq = mkt.qqq;
-  const mktStatus = (spy.chg > 0.5 && qqq.chg > 0.5) ? '강세' : (spy.chg < -0.5 && qqq.chg < -0.5) ? '약세' : '혼조';
+  const mkt = DATA.market;
+  const _a = CURRENCY === 'KRW' ? (mkt.kospi || { chg: 0 }) : (mkt.spy || { chg: 0 });
+  const _b = CURRENCY === 'KRW' ? (mkt.kosdaq || { chg: 0 }) : (mkt.qqq || { chg: 0 });
+  const mktStatus = (_a.chg > 0.5 && _b.chg > 0.5) ? '강세' : (_a.chg < -0.5 && _b.chg < -0.5) ? '약세' : '혼조';
   const mktCol = mktStatus === '강세' ? C.green : mktStatus === '약세' ? C.red : C.gold;
+  const pageTitle = CURRENCY === 'KRW' ? 'KR Gainers' : 'TGS';
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
       <header style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: isMobile ? '0 14px' : '0 24px', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 1px 8px #00000012' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', height: 52, gap: isMobile ? 8 : 16, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 15, fontWeight: 700, color: C.accent }}>TGS</span>
-            {!isMobile && <span style={{ fontSize: 13, color: C.lgray }}>Top Gainers Screening</span>}
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 15, fontWeight: 700, color: C.accent }}>{pageTitle}</span>
+            {!isMobile && <span style={{ fontSize: 13, color: C.lgray }}>{CURRENCY === 'KRW' ? '한국 주식 스크리닝' : 'Top Gainers Screening'}</span>}
           </div>
           <div style={{ flex: 1 }} />
           <ArchiveNav dates={ARCHIVE_DATES} today={DATA.date} />
@@ -628,10 +656,12 @@ def build_html(passed, mkt, wl=None, archive_dates=None, currency='USD', html_ou
     out_path = html_out or HTML_OUT
     data_json = _build_data_json(passed, mkt, wl, currency)
     dates_json = json.dumps(sorted(archive_dates or [TODAY], reverse=True))
+    market_title = 'KR Top Gainers' if currency == 'KRW' else 'US Top Gainers'
     html = (HTML_TEMPLATE
             .replace('__DATA_JSON__', data_json)
             .replace('__ARCHIVE_DATES__', dates_json)
-            .replace('__DATE__', TODAY))
+            .replace('__DATE__', TODAY)
+            .replace('__MARKET_TITLE__', market_title))
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"[html_report] HTML 생성 완료: {out_path}")
