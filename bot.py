@@ -668,11 +668,7 @@ def run_test(chat_id):
         send_message(chat_id, "\n".join(lines))
     except Exception as e:
         send_message(chat_id, f"❌ 테스트 오류: {e}")
-    try:
-        with open(OFFSET_FILE) as f:
-            return int(f.read().strip())
-    except Exception:
-        return None
+
 
 def analyze_ticker(chat_id, ticker):
     import yfinance as yf
@@ -831,18 +827,11 @@ def analyze_ticker(chat_id, ticker):
         lines.append(verdict)
 
         send_message(chat_id, "\n".join(lines))
-        print(f"[bot] /${ticker} 분석 완료")
+        print(f"[bot] /{ticker} 분석 완료")
 
     except Exception as e:
         send_message(chat_id, f"❌ {ticker} 분석 오류: {e}")
 
-
-
-    try:
-        with open(OFFSET_FILE) as f:
-            return int(f.read().strip())
-    except Exception:
-        return None
 
 def _load_offset():
     try:
