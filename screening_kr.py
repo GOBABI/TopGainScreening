@@ -42,6 +42,7 @@ KIS_APP_KEY    = os.environ.get("KIS_APP_KEY", "")
 KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET", "")
 KIS_BASE       = "https://openapi.koreainvestment.com:9443"
 _KIS_TOKEN_CACHE: dict = {"token": None, "expires": 0.0}
+_KIS_DIAG: dict = {"token_ok": None, "token_msg": "", "api_rt": "", "api_msg": "", "api_items": -1, "api_keys": []}
 
 SECTOR_KO = {
     'Healthcare': '헬스케어', 'Technology': '기술·IT',
@@ -85,9 +86,12 @@ def _get_kis_token():
     import time
     cache = _KIS_TOKEN_CACHE
     if cache["token"] and time.time() < cache["expires"]:
+        _KIS_DIAG["token_ok"] = True
         return cache["token"]
     if not KIS_APP_KEY or not KIS_APP_SECRET:
         log("KIS API 키 미설정 — Railway Variables에 KIS_APP_KEY / KIS_APP_SECRET 추가 필요")
+        _KIS_DIAG["token_ok"] = False
+        _KIS_DIAG["token_msg"] = "키 미설정"
         return ""
     try:
         r = requests.post(f"{KIS_BASE}/oauth2/tokenP",
@@ -101,11 +105,18 @@ def _get_kis_token():
             cache["token"]   = token
             cache["expires"] = time.time() + 3600 * 23
             log("KIS 토큰 발급 성공")
+            _KIS_DIAG["token_ok"]  = True
+            _KIS_DIAG["token_msg"] = "발급 성공"
         else:
+            msg = str(data.get("msg", data.get("msg1", "")))[:80]
             log(f"KIS 토큰 없음 — 전체 응답: {str(data)[:300]}")
+            _KIS_DIAG["token_ok"]  = False
+            _KIS_DIAG["token_msg"] = f"HTTP {r.status_code} / {msg}"
         return token
     except Exception as e:
         log(f"KIS 토큰 오류: {e}")
+        _KIS_DIAG["token_ok"]  = False
+        _KIS_DIAG["token_msg"] = str(e)[:80]
         return ""
 
 def _fetch_gainers_kis():
@@ -115,6 +126,7 @@ def _fetch_gainers_kis():
         log("KIS 토큰 없음")
         return []
     headers = {
+        "content-type": "application/json; charset=utf-8",
         "authorization": f"Bearer {token}",
         "appkey":    KIS_APP_KEY,
         "appsecret": KIS_APP_SECRET,
@@ -142,11 +154,18 @@ def _fetch_gainers_kis():
                          headers=headers, params=params, timeout=20)
         data = r.json()
         items = data.get("output", data.get("output1", []))
+        rt_cd = data.get('rt_cd', '?')
+        api_msg = str(data.get('msg1', data.get('msg', '')))[:80]
+        item_cnt = len(items) if isinstance(items, list) else -1
         log(
-            f"KIS 변동률순위 응답: HTTP {r.status_code}, rt_cd={data.get('rt_cd','?')}, "
-            f"msg={str(data.get('msg1',''))[:50]}, keys={list(data.keys())}, "
-            f"항목={len(items) if isinstance(items, list) else type(items)}"
+            f"KIS 변동률순위 응답: HTTP {r.status_code}, rt_cd={rt_cd}, "
+            f"msg={api_msg}, keys={list(data.keys())}, "
+            f"항목={item_cnt}"
         )
+        _KIS_DIAG["api_rt"]    = f"HTTP {r.status_code} / rt_cd={rt_cd}"
+        _KIS_DIAG["api_msg"]   = api_msg
+        _KIS_DIAG["api_items"] = item_cnt
+        _KIS_DIAG["api_keys"]  = list(data.keys())
         if not items:
             log(f"KIS 빈 결과 — 응답 샘플: {str(data)[:400]}")
         results = []
@@ -174,6 +193,8 @@ def _fetch_gainers_kis():
         return results
     except Exception as e:
         log(f"KIS 변동률 순위 오류: {e}")
+        _KIS_DIAG["api_rt"]  = "오류"
+        _KIS_DIAG["api_msg"] = str(e)[:80]
         return []
 
 def _check_pykrx():
@@ -921,9 +942,24 @@ def main():
         mkt      = fetch_market_kr()
 
         kis_ok = bool(KIS_APP_KEY and KIS_APP_SECRET)
+        tok_ok  = _KIS_DIAG.get("token_ok")
+        tok_msg = _KIS_DIAG.get("token_msg", "")
+        api_rt  = _KIS_DIAG.get("api_rt", "미호출")
+        api_msg = _KIS_DIAG.get("api_msg", "")
+        api_items = _KIS_DIAG.get("api_items", -1)
+        api_keys  = _KIS_DIAG.get("api_keys", [])
+        tok_line = (
+            f"{'✅' if tok_ok else '❌'} 토큰: {tok_msg}"
+            if tok_ok is not None else "⏭ 토큰: 캐시 사용"
+        )
         _send_one_message(
             "🔬 KRX 진단\n"
-            f"• KIS API: {'✅ 키 설정됨' if kis_ok else '❌ 미설정 (KIS_APP_KEY/KIS_APP_SECRET)'}\n"
+            f"• KIS 키: {'✅ 설정됨' if kis_ok else '❌ 미설정'}\n"
+            f"• {tok_line}\n"
+            f"• KIS API: {api_rt}\n"
+            f"• KIS msg: {api_msg or '(없음)'}\n"
+            f"• KIS 응답 keys: {api_keys}\n"
+            f"• KIS 항목: {api_items if api_items >= 0 else '미호출'}개\n"
             f"• 수집된 종목: {len(gainers)}개\n"
             f"• 오늘 날짜: {TODAY}"
         )
