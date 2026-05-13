@@ -95,8 +95,13 @@ def _fetch_gainers_pykrx():
                 df = stock.get_market_ohlcv_by_ticker(date_str, market=market)
                 if df is None or df.empty:
                     continue
-                df = df[df['거래량'] > 0].copy()
-                df['change_pct'] = (df['종가'] - df['시가']) / df['시가'] * 100
+                df = df[df['거래량'] > 50000].copy()
+                # 등락률 컬럼 사용 (전일 종가 대비 등락률)
+                chg_col = '등락률' if '등락률' in df.columns else None
+                if chg_col:
+                    df['change_pct'] = df[chg_col]
+                else:
+                    df['change_pct'] = (df['종가'] - df['시가']) / df['시가'] * 100
                 df = df[df['change_pct'] >= 5].sort_values('change_pct', ascending=False).head(30)
                 for ticker_code, row in df.iterrows():
                     sym = str(ticker_code) + suffix
@@ -110,7 +115,7 @@ def _fetch_gainers_pykrx():
                         'regularMarketPrice': float(row['종가']),
                         'regularMarketChangePercent': float(row['change_pct']),
                         'regularMarketVolume': int(row['거래량']),
-                        'averageDailyVolume3Month': int(row.get('거래량', 0)),
+                        'averageDailyVolume3Month': 0,  # pykrx 미제공 → 거래량 절대값으로만 필터
                         'marketCap': 0,
                         'fiftyTwoWeekHigh': float(row['고가']),
                         'twoHundredDayAverage': 0,
