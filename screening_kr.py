@@ -139,14 +139,14 @@ def _fetch_gainers_kis():
         "fid_input_iscd":          "0001",
         "fid_rank_sort_cls_code":  "0",
         "fid_input_cnt_1":         "0",
-        "fid_prc_cls_code":        "0",   # 가격 필터 없음 — Python에서 제어
+        "fid_prc_cls_code":        "0",   # 가격 필터 없음 — Python에서 처리
         "fid_input_price_1":       "",
         "fid_input_price_2":       "",
-        "fid_vol_cnt":             "0",   # 거래량 필터 없음 — Python에서 제어
+        "fid_vol_cnt":             "0",   # 거래량 필터 없음 — Python에서 처리
         "fid_trgt_cls_code":       "0",
         "fid_trgt_exls_cls_code":  "0000000000",
         "fid_div_cls_code":        "0",
-        "fid_rsfl_rate1":          "",    # 변동률 최소 필터 없음 — Python에서 제어
+        "fid_rsfl_rate1":          "",    # 변동률 최소 필터 없음 — Python에서 처리
         "fid_rsfl_rate2":          "",
     }
     try:
@@ -769,7 +769,7 @@ def refresh_watchlist_ta(wl, today_tickers):
 
 def push_watchlist():
     try:
-      with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
+        with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
             content = f.read()
         _gh_upsert_data("watchlist_kr.json", content)
         log("GitHub watchlist_kr.json push 완료")
