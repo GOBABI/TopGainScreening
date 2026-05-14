@@ -8,6 +8,12 @@ send_telegram_html(passed, mkt)  →  텔레그램 전송
 import os, json, requests
 from datetime import datetime
 
+def _safe_float(v, default=0.0):
+    try:
+        return float(v) if v is not None else default
+    except (ValueError, TypeError):
+        return default
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_OUT  = os.path.join(BASE_DIR, 'us_market_screening_latest.html')
 TODAY     = datetime.now().strftime('%Y-%m-%d')
@@ -31,7 +37,7 @@ def _watch_status(days, appearances, ql_pos):
     return f"{days}일차 — 재평가 필요"
 
 # ── 데이터 직렬화 ─────────────────────────────────────────────────────
-def _build_data_json(passed, mkt, wl):
+def _build_data_json(passed, mkt, wl, currency='USD'):
     """screening.py 결과물을 HTML에 주입할 JSON 형태로 변환"""
     today_set = {s['ticker'] for s in passed}
 
@@ -54,7 +60,7 @@ def _build_data_json(passed, mkt, wl):
             'isToday':       tk in today_set,
             'last_rsi':      e.get('last_rsi', 0),
             'last_adx':      e.get('last_adx', 0),
-            'last_macd_bull': e.get('last_macd_bull', False),
+            'last_macd_bull': e.get('last_madc_bull', False),
             'last_52w_pct':  e.get('last_52w_pct', 0),
             'last_ytd':      e.get('last_ytd', 0),
         }
@@ -81,10 +87,10 @@ def _build_data_json(passed, mkt, wl):
             'above_200ma':   bool(s.get('above_200ma', False)),
             'vol_ratio':     round(s.get('vol_ratio', 0), 1),
             'vol_trend':     s.get('vol_trend', ''),
-            'pe_forward':    round(s.get('pe_forward') or 0, 1),
+            'pe_forward':    round(_safe_float(s.get('pe_forward')), 1),
             'rev_growth':    s.get('rev_growth'),
             'analyst_rec':   s.get('analyst_rec', ''),
-            'analyst_target': round(s.get('analyst_target') or 0, 2),
+            'analyst_target': round(_safe_float(s.get('analyst_target')), 2),
             'catalysts':     (s.get('catalysts') or [])[:3],
             'risks':         (s.get('risks') or []),
             'summary':       (s.get('korean_desc') or s.get('summary') or '')[:300],
@@ -94,9 +100,10 @@ def _build_data_json(passed, mkt, wl):
     market_out = {k: mkt.get(k, {'price': 0, 'chg': 0, 'week': 0}) for k in market_keys}
 
     return json.dumps({
-        'date':    TODAY,
-        'market':  market_out,
-        'passed':  passed_out,
+        'date':     TODAY,
+        'currency': currency,
+        'market':   market_out,
+        'passed':   passed_out,
         'watchlist': watchlist_out,
     }, ensure_ascii=False)
 
@@ -108,7 +115,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>US Top Gainers Screening — __DATE__</title>
+<title>__MARKET_TITLE__ — __DATE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -142,7 +149,13 @@ const C = {
 const isMobile = window.innerWidth < 640;
 const REC_MAP = { strong_buy: '강력매수', buy: '매수', hold: '보유', underperform: '비중축소', sell: '매도', none: '없음' };
 const SECTOR_KO = { Healthcare: '헬스케어', Technology: '기술·IT', Industrials: '산업재', 'Basic Materials': '소재', 'Consumer Cyclical': '경기소비재', 'Financial Services': '금융', 'Communication Services': '커뮤니케이션', Energy: '에너지', 'Real Estate': '부동산' };
-const tvLink = (ticker) => `https://www.tradingview.com/chart/?symbol=NASDAQ:${ticker}`;
+const CURRENCY = DATA.currency || 'USD';
+const fmtPrice = (v) => CURRENCY === 'KRW'
+  ? '₩' + Math.round(v).toLocaleString('ko-KR')
+  : '$' + (v || 0).toFixed(2);
+const tvLink = (ticker) => CURRENCY === 'KRW'
+  ? `https://www.tradingview.com/chart/?symbol=KRX:${ticker.replace(/\.(KS|KQ)$/, '')}`
+  : `https://www.tradingview.com/chart/?symbol=NASDAQ:${ticker}`;
 
 const Badge = ({ label, color }) => (
   <span style={{ background: color + '22', color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' }}>{label}</span>
@@ -168,6 +181,28 @@ const QlBadge = ({ pos }) => {
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: col + '22', color: col, border: `1.5px solid ${col}55`, fontWeight: 800, fontSize: 13, fontFamily: 'JetBrains Mono' }}>{label}</span>
   );
 };
+
+// ── Market Nav ────────────────────────────────────────────────────────
+const MarketNav = () => (
+  <div style={{ display: 'flex', gap: 3, background: C.panel2, borderRadius: 8, padding: 3, border: `1px solid ${C.border}` }}>
+    <a href={CURRENCY === 'USD' ? '#' : './'}
+      onClick={CURRENCY === 'USD' ? (e => e.preventDefault()) : undefined}
+      style={{ padding: '3px 11px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+               background: CURRENCY === 'USD' ? C.accent : 'transparent',
+               color: CURRENCY === 'USD' ? '#fff' : C.lgray,
+               textDecoration: 'none', cursor: CURRENCY === 'USD' ? 'default' : 'pointer' }}>
+      🇺🇸 미국장
+    </a>
+    <a href={CURRENCY === 'KRW' ? '#' : 'kr_index.html'}
+      onClick={CURRENCY === 'KRW' ? (e => e.preventDefault()) : undefined}
+      style={{ padding: '3px 11px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+               background: CURRENCY === 'KRW' ? C.green : 'transparent',
+               color: CURRENCY === 'KRW' ? '#fff' : C.lgray,
+               textDecoration: 'none', cursor: CURRENCY === 'KRW' ? 'default' : 'pointer' }}>
+      🇰🇷 한국장
+    </a>
+  </div>
+);
 
 // ── Archive Nav ───────────────────────────────────────────────────────
 const ArchiveNav = ({ dates, today }) => {
@@ -277,7 +312,7 @@ const StockCard = ({ s, rank, expanded, onToggle }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 18, fontWeight: 700, color: C.white }}>${s.price.toFixed(2)}</div>
+            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 18, fontWeight: 700, color: C.white }}>{fmtPrice(s.price)}</div>
             <div style={{ color: C.green, fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600 }}>+{s.change_pct.toFixed(2)}%</div>
           </div>
           <div style={{ width: 80 }}><ScoreBar score={s.score} /></div>
@@ -296,7 +331,7 @@ const StockCard = ({ s, rank, expanded, onToggle }) => {
           [
             { l: 'YTD',   v: (s.ytd >= 0 ? '+' : '') + s.ytd.toFixed(1) + '%', c: s.ytd >= 0 ? C.green : C.red },
             { l: '52주%', v: w52.toFixed(1) + '%',                              c: w52 >= 90 ? C.green : C.lgray },
-            { l: '목표가', v: s.analyst_target ? `$${s.analyst_target.toFixed(1)}` : 'N/A', c: upside > 20 ? C.green : upside < 0 ? C.red : C.gold },
+            { l: '목표가', v: s.analyst_target ? fmtPrice(s.analyst_target) : 'N/A', c: upside > 20 ? C.green : upside < 0 ? C.red : C.gold },
             { l: '200MA', v: s.above_200ma ? '▲ 상단' : '▼ 하단',              c: s.above_200ma ? C.green : C.red },
           ],
         ].map((row, ri) => (
@@ -337,13 +372,13 @@ const StockCard = ({ s, rank, expanded, onToggle }) => {
             <div style={{ fontSize: 11, color: C.lgray, fontWeight: 700, letterSpacing: '0.08em', marginBottom: 10 }}>기술적 체크리스트</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', background: C.panel2, borderRadius: 8, overflow: 'hidden' }}>
               <tbody>
-                <TechRow label="200MA"   val={`$${s['200ma'].toFixed(2)}`} judge={s.above_200ma ? '▲ 상단' : '▼ 하단'} judgeColor={s.above_200ma ? C.green : C.red} note={`현재가 $${s.price.toFixed(2)}`} />
+                <TechRow label="200MA"   val={fmtPrice(s['200ma'])} judge={s.above_200ma ? '▲ 상단' : '▼ 하단'} judgeColor={s.above_200ma ? C.green : C.red} note={`현재가 ${fmtPrice(s.price)}`} />
                 <TechRow label="RSI"     val={s.rsi.toFixed(1)}   judge={(s.rsi>=40&&s.rsi<=75)?'✓ 양호':'! 고RSI'}    judgeColor={(s.rsi>=40&&s.rsi<=75)?C.green:C.gold} note="40~75 이상적" />
                 <TechRow label="ADX"     val={s.adx.toFixed(1)}   judge={s.adx>25?'✓ 강추세':'△ 약추세'}               judgeColor={s.adx>25?C.green:C.gold}  note="ADX>25 선호" />
                 <TechRow label="MACD"    val={s.macd_bull?'매수':'중립'} judge={s.macd_bull?'✓':'—'}                    judgeColor={s.macd_bull?C.green:C.gray} note="Signal 상향돌파" />
-                <TechRow label="52주 고점" val={`${w52.toFixed(1)}%`} judge={w52>=90?'✓ 신고가권':'△'}                 judgeColor={w52>=90?C.green:C.gold}   note={`고점 $${s['52w_high'].toFixed(2)}`} />
+                <TechRow label="52주 고점" val={`${w52.toFixed(1)}%`} judge={w52>=90?'✓ 신고가권':'△'}                 judgeColor={w52>=90?C.green:C.gold}   note={`고점 ${fmtPrice(s['52w_high'])}`} />
                 <TechRow label="YTD"     val={`${s.ytd>=0?'+':''}${s.ytd.toFixed(1)}%`} judge={s.ytd>=50?'✓ 강세':'△'} judgeColor={s.ytd>=50?C.green:C.gold} note="+50% 이상 선호" />
-                <TechRow label="목표가"  val={s.analyst_target?`$${s.analyst_target.toFixed(1)}`:'N/A'} judge={`${upside>=0?'+':''}${upside.toFixed(1)}% 업사이드`} judgeColor={upside>20?C.green:upside<0?C.red:C.gold} note={`QU: ${s.ql_desc}`} />
+                <TechRow label="목표가"  val={s.analyst_target?fmtPrice(s.analyst_target):'N/A'} judge={`${upside>=0?'+':''}${upside.toFixed(1)}% 업사이드`} judgeColor={upside>20?C.green:upside<0?C.red:C.gold} note={`QU: ${s.ql_desc}`} />
               </tbody>
             </table>
           </div>
@@ -382,11 +417,11 @@ const 최적진입구간Section = ({ passed }) => {
                 <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
                   <div>
                     <div style={{ fontSize: 10, color: C.gray, marginBottom: 2 }}>현재가</div>
-                    <div style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: C.white }}>${s.price.toFixed(2)}</div>
+                    <div style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: C.white }}>{fmtPrice(s.price)}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: 10, color: C.gray, marginBottom: 2 }}>손절가</div>
-                    <div style={{ fontFamily: 'JetBrains Mono', color: C.red, fontWeight: 600 }}>${stopLoss} <span style={{ fontSize: 10, color: C.gray }}>(-1.5%)</span></div>
+                    <div style={{ fontFamily: 'JetBrains Mono', color: C.red, fontWeight: 600 }}>{fmtPrice(s.price * 0.985)} <span style={{ fontSize: 10, color: C.gray }}>(-1.5%)</span></div>
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: C.lgray }}>{conds}</div>
@@ -413,9 +448,9 @@ const 최적진입구간Section = ({ passed }) => {
                     <td style={{ padding: '12px 14px', fontFamily: 'JetBrains Mono', color: C.accent, fontWeight: 700 }}>#{i+1}</td>
                     <td style={{ padding: '12px 14px' }}><a href={tvLink(s.ticker)} target="_blank" rel="noreferrer" style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, fontSize: 15, color: C.teal }}>{s.ticker}</a></td>
                     <td style={{ padding: '12px 14px' }}><QlBadge pos={s.ql_pos} /></td>
-                    <td style={{ padding: '12px 14px', fontFamily: 'JetBrains Mono', fontWeight: 600, color: C.white }}>${s.price.toFixed(2)}</td>
+                    <td style={{ padding: '12px 14px', fontFamily: 'JetBrains Mono', fontWeight: 600, color: C.white }}>{fmtPrice(s.price)}</td>
                     <td style={{ padding: '12px 14px', fontSize: 12, color: C.lgray }}>{conds}<br/><span style={{ fontSize: 11, color: C.gray }}>거래량 급증 · 스몰캔들 상단</span></td>
-                    <td style={{ padding: '12px 14px', fontFamily: 'JetBrains Mono', color: C.red }}>${stopLoss}<br/><span style={{ fontSize: 10, color: C.gray }}>최대 -1.5%</span></td>
+                    <td style={{ padding: '12px 14px', fontFamily: 'JetBrains Mono', color: C.red }}>{fmtPrice(s.price * 0.985)}<br/><span style={{ fontSize: 10, color: C.gray }}>최대 -1.5%</span></td>
                     <td style={{ padding: '12px 14px', fontFamily: 'JetBrains Mono', fontSize: 14, color: col, fontWeight: 700 }}>{recStars(s.score)}</td>
                   </tr>
                 );
@@ -544,7 +579,7 @@ const WatchlistSection = ({ watchlist, today }) => {
                 {!isMobile && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: C.gray, minWidth: 76 }}>{e.first_seen}</span>}
                 <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: C.white, textAlign: 'center', minWidth: 28 }}>{e.days}일</span>
                 <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: e.appearances>=5?C.gold:C.lgray, textAlign: 'center', minWidth: 28 }}>×{e.appearances}</span>
-                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, color: C.white, fontWeight: 600, minWidth: 60 }}>${e.last_price.toFixed(2)}</span>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, color: C.white, fontWeight: 600, minWidth: 60 }}>{fmtPrice(e.last_price)}</span>
                 <QlBadge pos={e.last_ql_pos} />
                 <div style={{ minWidth: 80 }}><ScoreBar score={e.last_score} /></div>
                 <span style={{ fontSize: 11, color: statusCol, fontWeight: 600, minWidth: 80 }}>{e.status}</span>
@@ -574,6 +609,7 @@ function App() {
             <span style={{ fontFamily: 'JetBrains Mono', fontSize: 15, fontWeight: 700, color: C.accent }}>TGS</span>
             {!isMobile && <span style={{ fontSize: 13, color: C.lgray }}>Top Gainers Screening</span>}
           </div>
+          <MarketNav />
           <div style={{ flex: 1 }} />
           <ArchiveNav dates={ARCHIVE_DATES} today={DATA.date} />
           {!isMobile && <Badge label={`시장 ${mktStatus}`} color={mktCol} />}
@@ -611,16 +647,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 """
 
 # ── 빌더 ─────────────────────────────────────────────────────────────
-def build_html(passed, mkt, wl=None, archive_dates=None):
-    data_json = _build_data_json(passed, mkt, wl)
+def build_html(passed, mkt, wl=None, archive_dates=None, currency='USD', html_out=None):
+    out_path = html_out or HTML_OUT
+    data_json = _build_data_json(passed, mkt, wl, currency)
     dates_json = json.dumps(sorted(archive_dates or [TODAY], reverse=True))
+    market_title = 'KR Top Gainers Screening' if currency == 'KRW' else 'US Top Gainers Screening'
     html = (HTML_TEMPLATE
             .replace('__DATA_JSON__', data_json)
             .replace('__ARCHIVE_DATES__', dates_json)
+            .replace('__MARKET_TITLE__', market_title)
             .replace('__DATE__', TODAY))
-    with open(HTML_OUT, 'w', encoding='utf-8') as f:
+    with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f"[html_report] HTML 생성 완료: {HTML_OUT}")
+    print(f"[html_report] HTML 생성 완료: {out_path}")
     return html
 
 
@@ -628,17 +667,28 @@ def build_html(passed, mkt, wl=None, archive_dates=None):
 PAGES_URL = "https://gobabi.github.io/TopGainScreening"
 
 
-def send_telegram_html(passed, mkt):
+def send_telegram_html(passed, mkt, currency='USD'):
     import time
-    spy = mkt.get('spy', {}); qqq = mkt.get('qqq', {}); vix = mkt.get('vix', {})
-    caption = (
-        f"📊 US Top Gainers Screening [{TODAY}]\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"SPY {spy.get('chg',0):+.2f}% | QQQ {qqq.get('chg',0):+.2f}% | VIX {vix.get('price',0):.1f} ({vix.get('chg',0):+.1f}%)\n"
-        f"최종 통과: {len(passed)}개\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"🌐 웹 리포트: {PAGES_URL}\n"
-    )
+    if currency == 'KRW':
+        kospi = mkt.get('kospi', {}); kosdaq = mkt.get('kosdaq', {})
+        caption = (
+            f"📊 KR Top Gainers Screening [{TODAY}]\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"KOSPI {kospi.get('chg',0):+.2f}% | KOSDAQ {kosdaq.get('chg',0):+.2f}%\n"
+            f"최종 통과: {len(passed)}개\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🌐 웹 리포트: {PAGES_URL}\n"
+        )
+    else:
+        spy = mkt.get('spy', {}); qqq = mkt.get('qqq', {}); vix = mkt.get('vix', {})
+        caption = (
+            f"📊 US Top Gainers Screening [{TODAY}]\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"SPY {spy.get('chg',0):+.2f}% | QQQ {qqq.get('chg',0):+.2f}% | VIX {vix.get('price',0):.1f} ({vix.get('chg',0):+.1f}%)\n"
+            f"최종 통과: {len(passed)}개\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🌐 웹 리포트: {PAGES_URL}\n"
+        )
     for s in passed:
         caption += f"• {s['ticker']} +{s['change_pct']:.1f}% | RSI:{s['rsi']:.0f} | {s['ql_pos']} | {s['score']}/9\n"
     if not passed:
