@@ -60,7 +60,7 @@ def _build_data_json(passed, mkt, wl, currency='USD'):
             'isToday':       tk in today_set,
             'last_rsi':      e.get('last_rsi', 0),
             'last_adx':      e.get('last_adx', 0),
-            'last_macd_bull': e.get('last_macd_bull', False),
+            'last_macd_bull': e.get('last_madc_bull', False),
             'last_52w_pct':  e.get('last_52w_pct', 0),
             'last_ytd':      e.get('last_ytd', 0),
         }
@@ -96,7 +96,10 @@ def _build_data_json(passed, mkt, wl, currency='USD'):
             'summary':       (s.get('korean_desc') or s.get('summary') or '')[:300],
         })
 
-    market_keys = ['spy', 'qqq', 'vix', 'smh', 'xlk', 'xlv', 'xle', 'xli']
+    if currency == 'KRW':
+        market_keys = ['kospi', 'kosdaq', 'ks200']
+    else:
+        market_keys = ['spy', 'qqq', 'vix', 'smh', 'xlk', 'xlv', 'xle', 'xli']
     market_out = {k: mkt.get(k, {'price': 0, 'chg': 0, 'week': 0}) for k in market_keys}
 
     return json.dumps({
@@ -223,14 +226,21 @@ const ArchiveNav = ({ dates, today }) => {
 };
 
 // ── Market ────────────────────────────────────────────────────────────
+const fmtIndex = (v) => CURRENCY === 'KRW'
+  ? Math.round(v).toLocaleString('ko-KR')
+  : '$' + (v || 0).toFixed(2);
+
 const IndexCard = ({ label, data, isVix }) => {
   const good = isVix ? data.chg < 0 : data.chg >= 0;
   const col = good ? C.green : C.red;
+  const priceStr = CURRENCY === 'KRW'
+    ? Math.round(data.price).toLocaleString('ko-KR')
+    : (isVix ? '' : '$') + data.price.toFixed(2) + (isVix ? 'p' : '');
   return (
     <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', flex: 1, minWidth: 140 }}>
       <div style={{ fontSize: 11, color: C.lgray, fontWeight: 500, letterSpacing: '0.08em', marginBottom: 4 }}>{label}</div>
       <div style={{ fontFamily: 'JetBrains Mono', fontSize: 22, fontWeight: 700, color: C.white, marginBottom: 4 }}>
-        {isVix ? '' : '$'}{data.price.toFixed(2)}{isVix ? 'p' : ''}
+        {priceStr}
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ color: col, fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600 }}>{data.chg >= 0 ? '▲' : '▼'} {data.chg > 0 ? '+' : ''}{data.chg.toFixed(2)}%</span>
@@ -241,11 +251,13 @@ const IndexCard = ({ label, data, isVix }) => {
 };
 
 const SectorBar = ({ mkt }) => {
-  const sectors = [{ key: 'xlk', label: '기술 XLK' }, { key: 'smh', label: '반도체 SMH' }, { key: 'xlv', label: '헬스케어 XLV' }, { key: 'xle', label: '에너지 XLE' }, { key: 'xli', label: '산업재 XLI' }];
+  const sectors = CURRENCY === 'KRW'
+    ? [{ key: 'ks200', label: '코스피200' }]
+    : [{ key: 'xlk', label: '기술 XLK' }, { key: 'smh', label: '반도체 SMH' }, { key: 'xlv', label: '헬스케어 XLV' }, { key: 'xle', label: '에너지 XLE' }, { key: 'xli', label: '산업재 XLI' }];
   return (
     <div style={{ display: 'flex', background: C.panel2, borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       {sectors.map(({ key, label }) => {
-        const d = mkt[key]; const pos = d.chg >= 0;
+        const d = mkt[key]; if (!d) return null; const pos = d.chg >= 0;
         return (
           <div key={key} style={{ flex: 1, padding: '10px 8px', textAlign: 'center', borderRight: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.lgray, marginBottom: 2 }}>{label}</div>
@@ -258,8 +270,9 @@ const SectorBar = ({ mkt }) => {
 };
 
 const MarketSection = ({ mkt }) => {
-  const spy = mkt.spy; const qqq = mkt.qqq;
-  const status = (spy.chg > 0.5 && qqq.chg > 0.5) ? '강세' : (spy.chg < -0.5 && qqq.chg < -0.5) ? '약세' : '혼조';
+  const ref1 = CURRENCY === 'KRW' ? mkt.kospi  : mkt.spy;
+  const ref2 = CURRENCY === 'KRW' ? mkt.kosdaq : mkt.qqq;
+  const status = (ref1.chg > 0.5 && ref2.chg > 0.5) ? '강세' : (ref1.chg < -0.5 && ref2.chg < -0.5) ? '약세' : '혼조';
   const statusCol = status === '강세' ? C.green : status === '약세' ? C.red : C.gold;
   return (
     <section style={{ marginBottom: 32 }}>
@@ -269,10 +282,16 @@ const MarketSection = ({ mkt }) => {
         <Badge label={`${status} 마감`} color={statusCol} />
       </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-        <IndexCard label="S&P 500 (SPY)" data={mkt.spy} />
-        <IndexCard label="NASDAQ 100 (QQQ)" data={mkt.qqq} />
-        <IndexCard label="변동성 (VIX)" data={mkt.vix} isVix />
-        <IndexCard label="반도체 (SMH)" data={mkt.smh} />
+        {CURRENCY === 'KRW' ? (<>
+          <IndexCard label="코스피 (^KS11)" data={mkt.kospi} />
+          <IndexCard label="코스닥 (^KQ11)" data={mkt.kosdaq} />
+          {mkt.ks200 && <IndexCard label="코스피200 (^KS200)" data={mkt.ks200} />}
+        </>) : (<>
+          <IndexCard label="S&P 500 (SPY)" data={mkt.spy} />
+          <IndexCard label="NASDAQ 100 (QQQ)" data={mkt.qqq} />
+          <IndexCard label="변동성 (VIX)" data={mkt.vix} isVix />
+          <IndexCard label="반도체 (SMH)" data={mkt.smh} />
+        </>)}
       </div>
       <SectorBar mkt={mkt} />
     </section>
@@ -598,8 +617,10 @@ const WatchlistSection = ({ watchlist, today }) => {
 function App() {
   const [expanded, setExpanded] = React.useState({});
   const toggle = (tk) => setExpanded(prev => ({ ...prev, [tk]: !prev[tk] }));
-  const mkt = DATA.market; const spy = mkt.spy; const qqq = mkt.qqq;
-  const mktStatus = (spy.chg > 0.5 && qqq.chg > 0.5) ? '강세' : (spy.chg < -0.5 && qqq.chg < -0.5) ? '약세' : '혼조';
+  const mkt = DATA.market;
+  const _r1 = CURRENCY === 'KRW' ? mkt.kospi  : mkt.spy;
+  const _r2 = CURRENCY === 'KRW' ? mkt.kosdaq : mkt.qqq;
+  const mktStatus = (_r1.chg > 0.5 && _r2.chg > 0.5) ? '강세' : (_r1.chg < -0.5 && _r2.chg < -0.5) ? '약세' : '혼조';
   const mktCol = mktStatus === '강세' ? C.green : mktStatus === '약세' ? C.red : C.gold;
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
