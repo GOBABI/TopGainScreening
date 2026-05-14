@@ -119,12 +119,8 @@ def _get_kis_token():
         _KIS_DIAG["token_msg"] = str(e)[:80]
         return ""
 
-def _fetch_gainers_kis():
-    """한국투자증권 API — KOSPI 상승률 상위 종목 (FHPST01700000)"""
-    token = _get_kis_token()
-    if not token:
-        log("KIS 토큰 없음")
-        return []
+def _kis_fluctuation_request(token, mrkt_code, iscd, suffix):
+    """KIS 변동률순위 API 호출 — KOSPI/KOSDAQ 공통"""
     headers = {
         "content-type": "application/json; charset=utf-8",
         "authorization": f"Bearer {token}",
@@ -134,61 +130,79 @@ def _fetch_gainers_kis():
         "custtype":  "P",
     }
     params = {
-        "fid_cond_mrkt_div_code":  "J",
+        "fid_cond_mrkt_div_code":  mrkt_code,  # "J"=KOSPI, "Q"=KOSDAQ
         "fid_cond_scr_div_code":   "20170",
-        "fid_input_iscd":          "0001",
+        "fid_input_iscd":          iscd,        # "0001"=KOSPI, "1001"=KOSDAQ
         "fid_rank_sort_cls_code":  "0",
-        "fid_input_cnt_1":         "0",
-        "fid_prc_cls_code":        "0",   # 가격 필터 없음 — Python에서 처리
+        "fid_input_cnt_1":         "50",        # 최대 50개
+        "fid_prc_cls_code":        "0",
         "fid_input_price_1":       "",
         "fid_input_price_2":       "",
-        "fid_vol_cnt":             "0",   # 거래량 필터 없음 — Python에서 처리
+        "fid_vol_cnt":             "0",
         "fid_trgt_cls_code":       "0",
         "fid_trgt_exls_cls_code":  "0000000000",
         "fid_div_cls_code":        "0",
-        "fid_rsfl_rate1":          "",    # 변동률 최소 필터 없음 — Python에서 처리
+        "fid_rsfl_rate1":          "",
         "fid_rsfl_rate2":          "",
     }
+    r = requests.get(f"{KIS_BASE}/uapi/domestic-stock/v1/ranking/fluctuation",
+                     headers=headers, params=params, timeout=20)
+    data = r.json()
+    items = data.get("output", data.get("output1", []))
+    rt_cd = data.get('rt_cd', '?')
+    api_msg = str(data.get('msg1', data.get('msg', '')))[:80]
+    item_cnt = len(items) if isinstance(items, list) else -1
+    log(f"KIS [{mrkt_code}] 응답: HTTP {r.status_code}, rt_cd={rt_cd}, 항목={item_cnt}")
+    results = []
+    for s in (items if isinstance(items, list) else []):
+        # 필드명 fallback: KIS API 버전에 따라 다를 수 있음
+        ticker = (
+            s.get("mksc_shrn_iscd") or
+            s.get("stck_shrn_iscd") or
+            s.get("iscd") or
+            ""
+        ).strip()
+        if not ticker:
+            continue
+        price   = _safe_float(s.get("stck_prpr",  0))
+        chg     = _safe_float(s.get("prdy_ctrt",  0))
+        vol     = int(_safe_float(s.get("acml_vol",  0)))
+        avg_vol = int(_safe_float(s.get("avrg_vol",  0)))
+        shares  = int(_safe_float(s.get("lstn_stcn", 0)))
+        results.append({
+            "symbol":                     ticker + suffix,
+            "shortName":                  s.get("hts_kor_isnm", ticker),
+            "regularMarketPrice":         price,
+            "regularMarketChangePercent": chg,
+            "regularMarketVolume":        vol,
+            "averageDailyVolume3Month":   avg_vol,
+            "marketCap":                  price * shares,
+            "fiftyTwoWeekHigh":           0,
+            "twoHundredDayAverage":       0,
+        })
+    return results, rt_cd, api_msg, item_cnt, data.keys(), items
+
+
+def _fetch_gainers_kis():
+    """한국투자증권 API — KOSPI 상승률 상위 50개 (FHPST01700000)"""
+    token = _get_kis_token()
+    if not token:
+        log("KIS 토큰 없음")
+        return []
     try:
-        r = requests.get(f"{KIS_BASE}/uapi/domestic-stock/v1/ranking/fluctuation",
-                         headers=headers, params=params, timeout=20)
-        data = r.json()
-        items = data.get("output", data.get("output1", []))
-        rt_cd = data.get('rt_cd', '?')
-        api_msg = str(data.get('msg1', data.get('msg', '')))[:80]
-        item_cnt = len(items) if isinstance(items, list) else -1
-        log(
-            f"KIS 변동률순위 응답: HTTP {r.status_code}, rt_cd={rt_cd}, "
-            f"msg={api_msg}, keys={list(data.keys())}, "
-            f"항목={item_cnt}"
-        )
-        _KIS_DIAG["api_rt"]    = f"HTTP {r.status_code} / rt_cd={rt_cd}"
+        results, rt_cd, api_msg, item_cnt, data_keys, items = _kis_fluctuation_request(
+            token, "J", "0001", ".KS")
+        _KIS_DIAG["api_rt"]    = f"HTTP 200 / rt_cd={rt_cd}"
         _KIS_DIAG["api_msg"]   = api_msg
         _KIS_DIAG["api_items"] = item_cnt
-        _KIS_DIAG["api_keys"]  = list(data.keys())
-        if not items:
-            log(f"KIS 빈 결과 — 응답 샘플: {str(data)[:400]}")
-        results = []
-        for s in (items if isinstance(items, list) else []):
-            ticker = s.get("mksc_shrn_iscd", "").strip()
-            if not ticker:
-                continue
-            price   = _safe_float(s.get("stck_prpr",  0))
-            chg     = _safe_float(s.get("prdy_ctrt",  0))
-            vol     = int(_safe_float(s.get("acml_vol",  0)))
-            avg_vol = int(_safe_float(s.get("avrg_vol",  0)))
-            shares  = int(_safe_float(s.get("lstn_stcn", 0)))
-            results.append({
-                "symbol":                     ticker + ".KS",
-                "shortName":                  s.get("hts_kor_isnm", ticker),
-                "regularMarketPrice":         price,
-                "regularMarketChangePercent": chg,
-                "regularMarketVolume":        vol,
-                "averageDailyVolume3Month":   avg_vol,
-                "marketCap":                  price * shares,
-                "fiftyTwoWeekHigh":           0,
-                "twoHundredDayAverage":       0,
-            })
+        _KIS_DIAG["api_keys"]  = list(data_keys)
+        first_item_keys = list(items[0].keys()) if isinstance(items, list) and items else []
+        _KIS_DIAG["item_keys"] = first_item_keys
+        first_item_sample = str(items[0])[:200] if isinstance(items, list) and items else ""
+        _KIS_DIAG["item_sample"] = first_item_sample
+        if items:
+            log(f"KIS 첫 항목 keys: {first_item_keys}")
+            log(f"KIS 첫 항목 샘플: {first_item_sample}")
         log(f"KIS KOSPI 상승률 순위: {len(results)}개")
         return results
     except Exception as e:
@@ -946,8 +960,10 @@ def main():
         tok_msg = _KIS_DIAG.get("token_msg", "")
         api_rt  = _KIS_DIAG.get("api_rt", "미호출")
         api_msg = _KIS_DIAG.get("api_msg", "")
-        api_items = _KIS_DIAG.get("api_items", -1)
-        api_keys  = _KIS_DIAG.get("api_keys", [])
+        api_items   = _KIS_DIAG.get("api_items", -1)
+        api_keys    = _KIS_DIAG.get("api_keys", [])
+        item_keys   = _KIS_DIAG.get("item_keys", [])
+        item_sample = _KIS_DIAG.get("item_sample", "")
         tok_line = (
             f"{'✅' if tok_ok else '❌'} 토큰: {tok_msg}"
             if tok_ok is not None else "⏭ 토큰: 캐시 사용"
@@ -958,8 +974,9 @@ def main():
             f"• {tok_line}\n"
             f"• KIS API: {api_rt}\n"
             f"• KIS msg: {api_msg or '(없음)'}\n"
-            f"• KIS 응답 keys: {api_keys}\n"
             f"• KIS 항목: {api_items if api_items >= 0 else '미호출'}개\n"
+            f"• KIS item keys: {item_keys}\n"
+            f"• KIS item 샘플: {item_sample[:150]}\n"
             f"• 수집된 종목: {len(gainers)}개\n"
             f"• 오늘 날짜: {TODAY}"
         )
