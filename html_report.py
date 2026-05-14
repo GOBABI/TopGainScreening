@@ -115,7 +115,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>US Top Gainers Screening — __DATE__</title>
+<title>__MARKET_TITLE__ — __DATE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -181,6 +181,28 @@ const QlBadge = ({ pos }) => {
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: col + '22', color: col, border: `1.5px solid ${col}55`, fontWeight: 800, fontSize: 13, fontFamily: 'JetBrains Mono' }}>{label}</span>
   );
 };
+
+// ── Market Nav ────────────────────────────────────────────────────────
+const MarketNav = () => (
+  <div style={{ display: 'flex', gap: 3, background: C.panel2, borderRadius: 8, padding: 3, border: `1px solid ${C.border}` }}>
+    <a href={CURRENCY === 'USD' ? '#' : './'}
+      onClick={CURRENCY === 'USD' ? (e => e.preventDefault()) : undefined}
+      style={{ padding: '3px 11px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+               background: CURRENCY === 'USD' ? C.accent : 'transparent',
+               color: CURRENCY === 'USD' ? '#fff' : C.lgray,
+               textDecoration: 'none', cursor: CURRENCY === 'USD' ? 'default' : 'pointer' }}>
+      🇺🇸 미국장
+    </a>
+    <a href={CURRENCY === 'KRW' ? '#' : 'kr_index.html'}
+      onClick={CURRENCY === 'KRW' ? (e => e.preventDefault()) : undefined}
+      style={{ padding: '3px 11px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+               background: CURRENCY === 'KRW' ? C.green : 'transparent',
+               color: CURRENCY === 'KRW' ? '#fff' : C.lgray,
+               textDecoration: 'none', cursor: CURRENCY === 'KRW' ? 'default' : 'pointer' }}>
+      🇰🇷 한국장
+    </a>
+  </div>
+);
 
 // ── Archive Nav ───────────────────────────────────────────────────────
 const ArchiveNav = ({ dates, today }) => {
@@ -587,6 +609,7 @@ function App() {
             <span style={{ fontFamily: 'JetBrains Mono', fontSize: 15, fontWeight: 700, color: C.accent }}>TGS</span>
             {!isMobile && <span style={{ fontSize: 13, color: C.lgray }}>Top Gainers Screening</span>}
           </div>
+          <MarketNav />
           <div style={{ flex: 1 }} />
           <ArchiveNav dates={ARCHIVE_DATES} today={DATA.date} />
           {!isMobile && <Badge label={`시장 ${mktStatus}`} color={mktCol} />}
@@ -628,9 +651,11 @@ def build_html(passed, mkt, wl=None, archive_dates=None, currency='USD', html_ou
     out_path = html_out or HTML_OUT
     data_json = _build_data_json(passed, mkt, wl, currency)
     dates_json = json.dumps(sorted(archive_dates or [TODAY], reverse=True))
+    market_title = 'KR Top Gainers Screening' if currency == 'KRW' else 'US Top Gainers Screening'
     html = (HTML_TEMPLATE
             .replace('__DATA_JSON__', data_json)
             .replace('__ARCHIVE_DATES__', dates_json)
+            .replace('__MARKET_TITLE__', market_title)
             .replace('__DATE__', TODAY))
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
