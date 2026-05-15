@@ -372,6 +372,24 @@ def scan_premarket(chat_id):
 
 
 
+def run_screening_kr(chat_id):
+    send_message(chat_id, "🔄 한국 시장(KRX) 스크리닝 중...")
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.join(BASE_DIR, "screening_kr.py")],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode == 0:
+            send_message(chat_id, "✅ KR 스크리닝 완료")
+        else:
+            err = (result.stderr or result.stdout)[-500:]
+            send_message(chat_id, f"❌ KR 스크리닝 오류\n<pre>{err}</pre>")
+    except subprocess.TimeoutExpired:
+        send_message(chat_id, "⚠️ 타임아웃: KR 스크리닝이 5분을 초과했습니다.")
+    except Exception as e:
+        send_message(chat_id, f"❌ 실행 오류: {e}")
+
+
 def run_refresh(chat_id):
     global _screening_running
     if _screening_running:
@@ -887,6 +905,12 @@ def main():
             elif text == "/pre" or text.startswith("/pre@"):
                 print(f"[bot] /pre 수신 (chat_id={chat_id})")
                 scan_premarket(chat_id)
+            elif text == "/kr" or text.startswith("/kr@"):
+                print(f"[bot] /kr 수신 (chat_id={chat_id})")
+                run_screening_kr(chat_id)
+            elif text == "/prekr" or text.startswith("/prekr@"):
+                print(f"[bot] /prekr 수신 (chat_id={chat_id})")
+                scan_premarket(chat_id)
             elif text == "/test" or text.startswith("/test@"):
                 print(f"[bot] /test 수신 (chat_id={chat_id})")
                 run_test(chat_id)
@@ -906,10 +930,15 @@ def main():
                 )
             elif text.startswith("/") and len(text) > 1:
                 potential = text[1:].split("@")[0].strip()
+                KNOWN_COMMANDS = {
+                    "report", "refresh", "force", "pre", "prekr",
+                    "kr", "test", "start",
+                }
                 if potential.isdigit() and len(potential) == 6:
                     print(f"[bot] /{potential} KR티커 분석 수신 (chat_id={chat_id})")
                     analyze_ticker_kr(chat_id, potential)
-                elif potential.upper().isalpha() and 1 <= len(potential) <= 6:
+                elif potential.upper().isalpha() and 1 <= len(potential) <= 6 \
+                        and potential.lower() not in KNOWN_COMMANDS:
                     print(f"[bot] /{potential.upper()} 티커 분석 수신 (chat_id={chat_id})")
                     analyze_ticker(chat_id, potential.upper())
 
