@@ -938,14 +938,20 @@ def github_pages_deploy_kr(archive_dates):
             if sha:
                 payload["sha"] = sha
             r_put = requests.put(url, headers=GH_HEADERS, json=payload, timeout=60)
+            if not r_put.ok:
+                log(f"gh-pages 업로드 실패 [{path}] HTTP {r_put.status_code}: {r_put.text[:200]}")
             return r_put.ok
+
+        if not GITHUB_TOKEN:
+            log("❌ GITHUB_TOKEN 미설정 — GitHub Pages 배포 스킵")
+            return
 
         ok1 = _upsert("kr_index.html", html_b64)
         ok2 = _upsert(f"kr_{TODAY}.html", html_b64)
         if ok1 and ok2:
-            log("KR GitHub Pages 배포 완료")
+            log("✅ KR GitHub Pages 배포 완료")
         else:
-            log("KR GitHub Pages 업로드 일부 실패")
+            log(f"⚠️ KR GitHub Pages 업로드 실패 (ok1={ok1}, ok2={ok2})")
     except Exception as e:
         log(f"KR GitHub Pages 배포 실패: {e}")
 
