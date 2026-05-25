@@ -411,23 +411,24 @@ def scan_premarket_kr(chat_id):
     h, m = now_kst.hour, now_kst.minute
     hm = h * 100 + m
 
-    # 시간대별 모드 결정
-    if 1530 <= hm < 1800:
+    # 시간대별 모드 결정 (KST 기준)
+    # NXT 장전 = 08:00–09:00 KST (정규장 전 시간외 단일가 — 사용자 호칭: NXT 장)
+    if 800 <= hm < 900:
         mode = "nxt"
-        mode_label = "NXT 시간외"
-        price_key = "postMarketPrice"
-    elif 800 <= hm < 900:
-        mode = "pre"
-        mode_label = "장전 단일가"
+        mode_label = "NXT 장전"
         price_key = "preMarketPrice"
     elif 900 <= hm < 1530:
         mode = "regular"
-        mode_label = "정규장 진행 중"
+        mode_label = "정규장"
         price_key = "regularMarketPrice"
+    elif 1530 <= hm < 1800:
+        mode = "after"
+        mode_label = "시간외 단일가"
+        price_key = "postMarketPrice"
     else:
         mode = "closed"
-        mode_label = "시장 외 시간"
-        price_key = "postMarketPrice"
+        mode_label = "장외"
+        price_key = "preMarketPrice"
 
     send_message(chat_id, f"⏳ 한국 {mode_label} 급상승 종목 스캔 중...")
 
