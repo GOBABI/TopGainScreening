@@ -52,6 +52,35 @@ DEFAULT_SYMBOLS = [
     "NFLX","CRM","ORCL","AVGO","ARM","MU","INTC","QCOM","TSM","ASML",
 ]
 
+# 한국 기본 스캔 대상 (시총 상위 + 주요 성장주)
+KR_DEFAULT_SYMBOLS = [
+    "005930.KS",  # 삼성전자
+    "000660.KS",  # SK하이닉스
+    "035420.KS",  # NAVER
+    "035720.KS",  # 카카오
+    "051910.KS",  # LG화학
+    "006400.KS",  # 삼성SDI
+    "207940.KS",  # 삼성바이오로직스
+    "005380.KS",  # 현대차
+    "068270.KS",  # 셀트리온
+    "028260.KS",  # 삼성물산
+    "000270.KS",  # 기아
+    "105560.KS",  # KB금융
+    "055550.KS",  # 신한지주
+    "086790.KS",  # 하나금융지주
+    "316140.KS",  # 우리금융지주
+    "003550.KS",  # LG
+    "012330.KS",  # 현대모비스
+    "011200.KS",  # HMM
+    "034020.KS",  # 두산에너빌리티
+    "090430.KS",  # 아모레퍼시픽
+    "247540.KQ",  # 에코프로비엠
+    "086520.KQ",  # 에코프로
+    "373220.KS",  # LG에너지솔루션
+    "009150.KS",  # 삼성전기
+    "000100.KS",  # 유한양행
+]
+
 
 def get_updates(offset=None):
     params = {"timeout": 30, "allowed_updates": ["message"]}
@@ -370,6 +399,108 @@ def scan_premarket(chat_id):
     print(f"[bot] /pre 완료 — {len(results)}개 종목 전송")
 
 
+def scan_premarket_kr(chat_id):
+    """NXT(시간외) / 장중 급상승 한국 주식 스캔"""
+    import yfinance as yf
+    import pytz
+    from datetime import datetime
+    from concurrent.futures import ThreadPoolExecutor
+
+    kst = pytz.timezone("Asia/Seoul")
+    now_kst = datetime.now(kst)
+    h, m = now_kst.hour, now_kst.minute
+    hm = h * 100 + m
+
+    # 시간대별 모드 결정
+    if 1530 <= hm < 1800:
+        mode = "nxt"
+        mode_label = "NXT 시간외"
+        price_key = "postMarketPrice"
+    elif 800 <= hm < 900:
+        mode = "pre"
+        mode_label = "장전 단일가"
+        price_key = "preMarketPrice"
+    elif 900 <= hm < 1530:
+        mode = "regular"
+        mode_label = "정규장 진행 중"
+        price_key = "regularMarketPrice"
+    else:
+        mode = "closed"
+        mode_label = "시장 외 시간"
+        price_key = "postMarketPrice"
+
+    send_message(chat_id, f"⏳ 한국 {mode_label} 급상승 종목 스캔 중...")
+
+    # 감시 종목 수집
+    symbols = list(KR_DEFAULT_SYMBOLS)
+    kr_watchlist_path = os.path.join(BASE_DIR, "watchlist_kr.json")
+    if os.path.exists(kr_watchlist_path):
+        try:
+            wl = json.load(open(kr_watchlist_path))
+            symbols = list(set(symbols + list(wl.get("tickers", {}).keys())))
+        except Exception:
+            pass
+
+    def _fetch_one(sym):
+        try:
+            info = yf.Ticker(sym).info
+            nxt_price  = float(info.get(price_key) or 0)
+            reg_price  = float(info.get("regularMarketPrice") or 0)
+            reg_close  = float(info.get("regularMarketPreviousClose") or 0)
+
+            if mode == "regular":
+                # 정규장: 당일 변동률 사용
+                base  = reg_close if reg_close > 0 else None
+                cur   = reg_price
+                chg   = float(info.get("regularMarketChangePercent") or 0)
+            else:
+                # NXT / 장전: 시간외 가격 vs 직전 종가
+                base = reg_close
+                cur  = nxt_price if nxt_price > 0 else reg_price
+                chg  = (cur - base) / base * 100 if base > 0 and cur > 0 else 0.0
+
+            if chg < 3.0 or cur <= 0:
+                return None
+
+            vol     = float(info.get("regularMarketVolume") or 0)
+            avg_vol = float(info.get("averageDailyVolume3Month") or 1)
+            return {
+                "sym":        sym,
+                "name":       info.get("shortName") or info.get("longName") or sym,
+                "chg":        chg,
+                "price":      cur,
+                "vol_ratio":  vol / avg_vol if avg_vol else 0,
+                "market_cap": float(info.get("marketCap") or 0),
+            }
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        raw = list(ex.map(_fetch_one, symbols))
+
+    results = [r for r in raw if r is not None]
+
+    if not results:
+        send_message(chat_id, f"📭 {mode_label} +3% 이상 급상승 종목이 없습니다.")
+        return
+
+    results.sort(key=lambda x: x["chg"], reverse=True)
+    results = results[:15]
+
+    ts = now_kst.strftime("%m/%d %H:%M")
+    header = f"<b>🚀 한국 {mode_label} 급상승 종목</b>\n<i>{ts} KST 기준</i>\n"
+    lines = [header]
+    for r in results:
+        market = "코스피" if ".KS" in r["sym"] else "코스닥"
+        code   = r["sym"].replace(".KS", "").replace(".KQ", "")
+        vol_tag = f"  🔥{r['vol_ratio']:.1f}x" if r["vol_ratio"] >= 2 else ""
+        lines.append(
+            f"<b>{code}</b> {r['name']} ({market})\n"
+            f"  ₩{int(r['price']):,}  <b>+{r['chg']:.1f}%</b>{vol_tag}"
+        )
+
+    send_message(chat_id, "\n\n".join(lines))
+    print(f"[bot] /prekr 완료 — {len(results)}개 종목 전송 (모드: {mode})")
 
 
 def run_screening_kr(chat_id):
@@ -910,7 +1041,7 @@ def main():
                 run_screening_kr(chat_id)
             elif text == "/prekr" or text.startswith("/prekr@"):
                 print(f"[bot] /prekr 수신 (chat_id={chat_id})")
-                scan_premarket(chat_id)
+                scan_premarket_kr(chat_id)
             elif text == "/test" or text.startswith("/test@"):
                 print(f"[bot] /test 수신 (chat_id={chat_id})")
                 run_test(chat_id)
@@ -921,8 +1052,8 @@ def main():
                     "/report — 미국 주식 스크리닝 리포트 생성 및 전송\n"
                     "/kr — 한국 주식(KRX) 스크리닝\n"
                     "/force — 장 시간 무관하게 강제 스크리닝\n"
-                    "/pre — 프리마켓 갭 상승 종목 스캔\n"
-                    "/prekr — 한국 주식 갭 스캔 (시간외/프리마켓)\n"
+                    "/pre — 미국 프리마켓 갭 상승 종목 스캔\n"
+                    "/prekr — 한국 NXT 시간외 / 장중 급상승 종목 스캔\n"
                     "/test — 서버 연결 및 데이터 진단\n"
                     "/$티커 — 종목 체크리스트 분석 (예: /NVDA)\n"
                     "/종목코드 — 한국 주식 분석 (예: /005930)\n\n"
