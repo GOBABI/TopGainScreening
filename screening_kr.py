@@ -133,7 +133,7 @@ def _kis_fluctuation_request(token, mrkt_code, iscd, suffix):
         "fid_cond_mrkt_div_code":  mrkt_code,  # "J"=KOSPI, "Q"=KOSDAQ
         "fid_cond_scr_div_code":   "20170",
         "fid_input_iscd":          iscd,        # "0001"=KOSPI, "1001"=KOSDAQ
-        "fid_rank_sort_cls_code":  "1",  # 1=내림차순(상승률 상위)
+        "fid_rank_sort_cls_code":  "0",  # 0=상승률순(상위), 1=하락률순
         "fid_input_cnt_1":         "50",        # 최대 50개
         "fid_prc_cls_code":        "0",
         "fid_input_price_1":       "",
