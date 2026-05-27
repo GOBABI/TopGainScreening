@@ -17,7 +17,7 @@ FONT_SB  = os.path.join(BASE_DIR, 'PretendardVariable.ttf')
 JSON_OUT      = os.path.join(BASE_DIR, 'screening_result.json')
 WATCHLIST_FILE = os.path.join(BASE_DIR, 'watchlist.json')
 
-BOT_TOKEN  = "8702268897:AAEhRnt0nuBnYCJeMdhofbX_h-D_YBTJxCE"
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
 CHAT_ID    = "7371637453"
 def _report_date():
     now = datetime.now()
