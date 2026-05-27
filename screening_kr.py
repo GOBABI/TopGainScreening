@@ -142,7 +142,7 @@ def _kis_fluctuation_request(token, mrkt_code, iscd, suffix):
         "fid_trgt_cls_code":       "0",
         "fid_trgt_exls_cls_code":  "0000000000",
         "fid_div_cls_code":        "0",
-        "fid_rsfl_rate1":          "",
+        "fid_rsfl_rate1":          "5",   # 등락률 하한 5% (5%↑ 종목만 반환)
         "fid_rsfl_rate2":          "",
     }
     r = requests.get(f"{KIS_BASE}/uapi/domestic-stock/v1/ranking/fluctuation",
@@ -203,6 +203,12 @@ def _fetch_gainers_kis():
         if items:
             log(f"KIS 첫 항목 keys: {first_item_keys}")
             log(f"KIS 첫 항목 샘플: {first_item_sample}")
+            ticker_summary = ", ".join(
+                f"{s.get('hts_kor_isnm','?')}({s.get('stck_shrn_iscd','?')}) {s.get('prdy_ctrt','?')}%"
+                for s in (items[:20] if isinstance(items, list) else [])
+            )
+            _KIS_DIAG["ticker_summary"] = ticker_summary
+            log(f"KIS 상위 20개: {ticker_summary}")
         log(f"KIS KOSPI 상승률 순위: {len(results)}개")
         return results
     except Exception as e:
@@ -974,6 +980,7 @@ def main():
             f"{'✅' if tok_ok else '❌'} 토큰: {tok_msg}"
             if tok_ok is not None else "⏭ 토큰: 캐시 사용"
         )
+        ticker_summary = _KIS_DIAG.get("ticker_summary", "")
         _send_one_message(
             "🔬 KRX 진단\n"
             f"• KIS 키: {'✅ 설정됨' if kis_ok else '❌ 미설정'}\n"
@@ -981,8 +988,7 @@ def main():
             f"• KIS API: {api_rt}\n"
             f"• KIS msg: {api_msg or '(없음)'}\n"
             f"• KIS 항목: {api_items if api_items >= 0 else '미호출'}개\n"
-            f"• KIS item keys: {item_keys}\n"
-            f"• KIS item 샘플: {item_sample[:150]}\n"
+            f"• KIS 상위목록: {ticker_summary[:300] or '(없음)'}\n"
             f"• 수집된 종목: {len(gainers)}개\n"
             f"• 오늘 날짜: {TODAY}"
         )
