@@ -18,7 +18,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_OUT  = os.path.join(BASE_DIR, 'us_market_screening_latest.html')
 TODAY     = datetime.now().strftime('%Y-%m-%d')
 
-BOT_TOKEN = "8702268897:AAEhRnt0nuBnYCJeMdhofbX_h-D_YBTJxCE"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 CHAT_ID   = "7371637453"
 
 # ── watchlist status helper (screening.py 와 동일 로직) ──────────────
