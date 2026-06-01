@@ -578,11 +578,25 @@ def run_screening_kr(gainers):
     log(f"1차 통과: {len(p1)}개")
 
     passed = []
+    reject_reasons = []
     for q in p1:
         ticker = q['symbol']
         log(f"  분석: {ticker}")
         ta = analyze(ticker)
-        if not ta or not ta['above_200ma'] or ta['rsi'] >= 80:
+        if not ta:
+            reason = f"{ticker}: yfinance 데이터 없음"
+            log(f"    탈락 — {reason}")
+            reject_reasons.append(reason)
+            continue
+        if not ta['above_200ma']:
+            reason = f"{ticker}: 200MA 하회 (가격 {q['regularMarketPrice']:,.0f} / MA200 {ta['200ma']:,.0f})"
+            log(f"    탈락 — {reason}")
+            reject_reasons.append(reason)
+            continue
+        if ta['rsi'] >= 80:
+            reason = f"{ticker}: RSI 과열 ({ta['rsi']:.1f})"
+            log(f"    탈락 — {reason}")
+            reject_reasons.append(reason)
             continue
 
         detail   = fetch_ticker_detail(ticker)
@@ -624,6 +638,9 @@ def run_screening_kr(gainers):
 
     passed.sort(key=lambda x: x['score'], reverse=True)
     log(f"2차 통과: {len(passed)}개")
+    if reject_reasons:
+        log(f"탈락 상세: {' | '.join(reject_reasons[:10])}")
+        _KIS_DIAG["reject_reasons"] = reject_reasons[:10]
     return passed
 
 # ── GitHub 동기화 ─────────────────────────────────────────────────────
@@ -994,6 +1011,12 @@ def main():
         )
 
         passed        = run_screening_kr(gainers)
+        reject_reasons = _KIS_DIAG.get("reject_reasons", [])
+        if reject_reasons:
+            _send_one_message(
+                f"🔍 2차 필터 탈락 상세 ({len(reject_reasons)}개)\n" +
+                "\n".join(f"• {r}" for r in reject_reasons)
+            )
         wl            = update_watchlist(passed)
         today_tickers = {s['ticker'] for s in passed}
         wl            = refresh_watchlist_ta(wl, today_tickers)
