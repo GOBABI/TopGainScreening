@@ -333,54 +333,83 @@ def _fetch_gainers_pykrx():
         log(f"pykrx 전체 오류: {e}")
         return []
 
-def _fetch_gainers_yf_kr():
-    """Yahoo Finance REST로 KR 당일 급등주 조회"""
-    url = ("https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved"
-           "?formatted=false&lang=ko-KR&region=KR&scrIds=day_gainers&count=50")
-    headers = {'User-Agent': 'Mozilla/5.0'}
+def _fetch_gainers_naver(market='KOSPI', suffix='.KS', count=50):
+    """네이버 파이낸스 모바일 API — 당일 등락률 상위 종목 (KIS 변동률 API 대체)"""
+    url = "https://m.stock.naver.com/api/stocks/top_stocks"
+    params = {"marketType": market, "criterion": "CHANGE_RATE_HIGH", "count": count}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "Referer": "https://m.stock.naver.com/",
+    }
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        data = r.json()
-        return data['finance']['result'][0].get('quotes', [])
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if not r.ok:
+            log(f"  Naver {market} HTTP {r.status_code}")
+            return []
+        raw = r.json()
+        # 응답 구조가 리스트이거나 {"stocks": [...]} 형태
+        items = raw if isinstance(raw, list) else (
+            raw.get("stocks") or raw.get("list") or raw.get("result") or []
+        )
+        results = []
+        for s in items:
+            code = (s.get("stockCode") or s.get("itemCode") or s.get("code") or "").strip()
+            if not code:
+                continue
+            name   = s.get("stockName") or s.get("name") or code
+            price  = _safe_float(s.get("closePrice") or s.get("price") or 0)
+            chg    = _safe_float(s.get("fluctuationsRatio") or s.get("changeRate") or
+                                 s.get("compareToPreviousClosePrice") or 0)
+            vol    = int(_safe_float(s.get("accumulatedTradingVolume") or
+                                     s.get("tradingVolume") or s.get("volume") or 0))
+            results.append({
+                "symbol":                     code + suffix,
+                "shortName":                  name,
+                "regularMarketPrice":         price,
+                "regularMarketChangePercent": chg,
+                "regularMarketVolume":        vol,
+                "averageDailyVolume3Month":   0,
+                "marketCap":                  0,
+                "fiftyTwoWeekHigh":           0,
+                "twoHundredDayAverage":       0,
+            })
+        log(f"  Naver {market}: {len(results)}개")
+        return results
     except Exception as e:
-        log(f"Yahoo KR 폴백 실패({e})")
+        log(f"  Naver {market} 오류: {e}")
         return []
 
 def fetch_gainers_kr():
-    log("한국 Top Gainers (KOSPI) 수집 중...")
-    FIELDS = ['symbol','shortName','regularMarketPrice','regularMarketChangePercent',
-              'regularMarketVolume','averageDailyVolume3Month','marketCap',
-              'fiftyTwoWeekHigh','twoHundredDayAverage']
+    log("한국 Top Gainers 수집 중 (KOSPI + KOSDAQ)...")
 
+    # 1순위: 네이버 파이낸스 (오늘 등락률 정확한 데이터)
+    results = []
+    for market, suffix in [('KOSPI', '.KS'), ('KOSDAQ', '.KQ')]:
+        results.extend(_fetch_gainers_naver(market, suffix, count=50))
+
+    if results:
+        results.sort(key=lambda q: q['regularMarketChangePercent'], reverse=True)
+        top = [q for q in results if q['regularMarketChangePercent'] > 0]
+        log(f"  Naver 총 {len(results)}개 (상승 {len(top)}개)")
+        _KIS_DIAG["ticker_summary"] = ", ".join(
+            f"{q['shortName']}({q['symbol'].split('.')[0]}) {q['regularMarketChangePercent']:+.2f}%"
+            for q in results[:15]
+        )
+        return results
+
+    # 2순위: KIS 변동률 API (잘못된 순위지만 없는 것보단 나음)
+    log("  Naver 실패 — KIS 폴백")
     if KIS_APP_KEY and KIS_APP_SECRET:
-        quotes = _fetch_gainers_kis()
-        if quotes:
-            return quotes
-        log("  KIS API 실패 — Yahoo 폴백 시도")
+        kis_results = _fetch_gainers_kis()
+        if kis_results:
+            return kis_results
 
-    import yfinance as yf
+    # 3순위: pykrx (보통 실패)
+    if _check_pykrx():
+        log("  pykrx 폴백...")
+        return _fetch_gainers_pykrx()
 
-    quotes = []
-    try:
-        result = yf.screen("day_gainers", count=50)
-        raw = result.get('quotes', [])
-        quotes = [q for q in raw if str(q.get('symbol','')).endswith('.KS')]
-        if quotes:
-            log(f"  yf.screen KR 결과: {len(quotes)}개")
-    except Exception as e:
-        log(f"  yf.screen 실패({e})")
-
-    if not quotes:
-        raw2 = _fetch_gainers_yf_kr()
-        quotes = [q for q in raw2 if str(q.get('symbol','')).endswith('.KS')]
-        log(f"  Yahoo KR REST 결과: {len(quotes)}개")
-
-    if not quotes and _check_pykrx():
-        log("  pykrx 폴백 시도...")
-        quotes = _fetch_gainers_pykrx()
-        return quotes
-
-    return [{k: q.get(k) or 0 for k in FIELDS} for q in quotes]
+    return []
 
 def _kis_index_price(iscd):
     """KIS 국내 업종 현재지수 (FHPUP02100000). iscd: 0001=KOSPI, 1001=KOSDAQ, 2001=KOSPI200"""
