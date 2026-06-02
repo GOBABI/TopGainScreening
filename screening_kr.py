@@ -142,7 +142,7 @@ def _kis_fluctuation_request(token, mrkt_code, iscd, suffix):
         "fid_trgt_cls_code":       "0",
         "fid_trgt_exls_cls_code":  "0000000000",
         "fid_div_cls_code":        "0",
-        "fid_rsfl_rate1":          "5",   # 등락률 하한 5% (5%↑ 종목만 반환)
+        "fid_rsfl_rate1":          "",
         "fid_rsfl_rate2":          "",
     }
     r = requests.get(f"{KIS_BASE}/uapi/domestic-stock/v1/ranking/fluctuation",
@@ -189,33 +189,35 @@ def _fetch_gainers_kis():
     if not token:
         log("KIS 토큰 없음")
         return []
-    try:
-        results, rt_cd, api_msg, item_cnt, data_keys, items = _kis_fluctuation_request(
-            token, "J", "0001", ".KS")
-        _KIS_DIAG["api_rt"]    = f"HTTP 200 / rt_cd={rt_cd}"
-        _KIS_DIAG["api_msg"]   = api_msg
-        _KIS_DIAG["api_items"] = item_cnt
-        _KIS_DIAG["api_keys"]  = list(data_keys)
-        first_item_keys = list(items[0].keys()) if isinstance(items, list) and items else []
-        _KIS_DIAG["item_keys"] = first_item_keys
-        first_item_sample = str(items[0])[:200] if isinstance(items, list) and items else ""
-        _KIS_DIAG["item_sample"] = first_item_sample
-        if items:
-            log(f"KIS 첫 항목 keys: {first_item_keys}")
-            log(f"KIS 첫 항목 샘플: {first_item_sample}")
-            ticker_summary = ", ".join(
-                f"{s.get('hts_kor_isnm','?')}({s.get('stck_shrn_iscd','?')}) {s.get('prdy_ctrt','?')}%"
-                for s in (items[:20] if isinstance(items, list) else [])
-            )
-            _KIS_DIAG["ticker_summary"] = ticker_summary
-            log(f"KIS 상위 20개: {ticker_summary}")
-        log(f"KIS KOSPI 상승률 순위: {len(results)}개")
-        return results
-    except Exception as e:
-        log(f"KIS 변동률 순위 오류: {e}")
-        _KIS_DIAG["api_rt"]  = "오류"
-        _KIS_DIAG["api_msg"] = str(e)[:80]
-        return []
+    all_results = []
+    diag_items = []
+    for mrkt_code, iscd, suffix, label in [
+        ("J", "0001", ".KS",  "KOSPI"),
+        ("Q", "1001", ".KQ",  "KOSDAQ"),
+    ]:
+        try:
+            results, rt_cd, api_msg, item_cnt, data_keys, items = _kis_fluctuation_request(
+                token, mrkt_code, iscd, suffix)
+            log(f"KIS {label}: {len(results)}개 (rt_cd={rt_cd})")
+            all_results.extend(results)
+            if isinstance(items, list):
+                diag_items.extend(items[:10])
+        except Exception as e:
+            log(f"KIS {label} 오류: {e}")
+    # 등락률 내림차순 정렬 → 상위 급등주가 앞에 오도록
+    all_results.sort(key=lambda q: q["regularMarketChangePercent"], reverse=True)
+    _KIS_DIAG["api_rt"]    = "HTTP 200"
+    _KIS_DIAG["api_msg"]   = "KOSPI+KOSDAQ"
+    _KIS_DIAG["api_items"] = len(all_results)
+    if diag_items:
+        ticker_summary = ", ".join(
+            f"{s.get('hts_kor_isnm','?')}({s.get('stck_shrn_iscd','?')}) {s.get('prdy_ctrt','?')}%"
+            for s in diag_items[:20]
+        )
+        _KIS_DIAG["ticker_summary"] = ticker_summary
+        log(f"KIS 상위 20개(KOSPI+KOSDAQ 혼합): {ticker_summary}")
+    log(f"KIS 전체 수집: {len(all_results)}개")
+    return all_results
 
 def _kis_daily_history(ticker_code, days_needed=280):
     """KIS 국내주식 일봉 조회 (FHKST03010100) — 200MA/RSI/MACD 계산용 과거 데이터.
