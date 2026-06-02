@@ -560,16 +560,24 @@ def analyze(ticker, current_price=None):
 
     vol_trend = 'N/A'
     vol_contraction = False
+    avg_vol_20d = 0
     if len(vol) >= 20:
-        avg_vol_20 = float(vol.iloc[-20:].mean())
+        avg_vol_20d = float(vol.iloc[-20:].mean())
         avg_vol_5  = float(vol.iloc[-5:].mean())
-        vol_trend  = '증가' if avg_vol_5 > avg_vol_20 * 1.2 else ('감소' if avg_vol_5 < avg_vol_20 * 0.8 else '보합')
+        vol_trend  = '증가' if avg_vol_5 > avg_vol_20d * 1.2 else ('감소' if avg_vol_5 < avg_vol_20d * 0.8 else '보합')
         vols = vol.iloc[-20:].values
         q1 = vols[:5].mean()
         q2 = vols[5:10].mean()
         q3 = vols[10:15].mean()
         q4 = vols[15:].mean()
         vol_contraction = bool((q4 < q3 and q3 < q2) or (q4 < q1 * 0.7))
+
+    # 1개월(약 20거래일) 수익률
+    month_return = 0.0
+    if len(c) >= 21:
+        p20 = float(c.iloc[-21])
+        if p20 > 0:
+            month_return = round((price - p20) / p20 * 100, 1)
 
     return {
         'price':           round(price, 0),
@@ -582,6 +590,8 @@ def analyze(ticker, current_price=None):
         '52w_high':        round(high52, 2),
         'ytd':             ytd,
         'adr':             adr,
+        'month_return':    month_return,
+        'avg_vol_20d':     int(avg_vol_20d),
         'ql_pos':          ql_pos,
         'ql_desc':         ql_desc,
         'vol_trend':       vol_trend,
@@ -678,21 +688,18 @@ def korean_desc(detail, ta, q):
     return desc.strip()
 
 # ── 스크리닝 메인 로직 ────────────────────────────────────────────────
-KR_MARKET_CAP_MAX = 50_000_000_000_000  # 50조 KRW
+# Qullamaggie LREP 기준 (한국 시장 적용)
+KR_PRICE_MIN    = 5_000          # 최소 주가 5,000원
+KR_VOL_AVG_MIN  = 500_000        # 20일 평균 거래량 ≥ 50만주
+KR_MONTH_RET    = 25.0           # 1개월 수익률 ≥ 25%
+KR_ADR_MIN      = 3.5            # 20일 ADR ≥ 3.5%
 
 def run_screening_kr(gainers):
-    def _vol_ok(q):
-        avg = q['averageDailyVolume3Month'] or 0
-        if avg == 0:
-            return q['regularMarketVolume'] >= 50_000
-        return q['regularMarketVolume'] >= avg * 1.5
-
+    # 1차: KIS 실시간 데이터 기반 느슨한 pre-filter (오늘 급등 + 최소 가격)
     p1 = [q for q in gainers
-          if q['regularMarketChangePercent'] >= 5
-          and q['regularMarketPrice'] >= 1000
-          and _vol_ok(q)
-          and (q['marketCap'] == 0 or q['marketCap'] < KR_MARKET_CAP_MAX)]
-    log(f"1차 통과: {len(p1)}개")
+          if q['regularMarketChangePercent'] >= 3
+          and q['regularMarketPrice'] >= KR_PRICE_MIN]
+    log(f"1차 통과: {len(p1)}개 (오늘 ≥3%, 주가 ≥{KR_PRICE_MIN:,}원)")
 
     passed = []
     reject_reasons = []
@@ -705,8 +712,24 @@ def run_screening_kr(gainers):
             log(f"    탈락 — {reason}")
             reject_reasons.append(reason)
             continue
+        # 2차 필터: Qullamaggie LREP 조건
         if not ta['above_200ma']:
-            reason = f"{ticker}: 200MA 하회 (가격 {q['regularMarketPrice']:,.0f} / MA200 {ta['200ma']:,.0f})"
+            reason = f"{ticker}: 200MA 하회 ({q['regularMarketPrice']:,.0f}원 < MA200 {ta['200ma']:,.0f}원)"
+            log(f"    탈락 — {reason}")
+            reject_reasons.append(reason)
+            continue
+        if ta['month_return'] < KR_MONTH_RET:
+            reason = f"{ticker}: 1개월 수익률 부족 ({ta['month_return']:+.1f}% < {KR_MONTH_RET}%)"
+            log(f"    탈락 — {reason}")
+            reject_reasons.append(reason)
+            continue
+        if ta['avg_vol_20d'] < KR_VOL_AVG_MIN:
+            reason = f"{ticker}: 평균거래량 부족 ({ta['avg_vol_20d']:,}주 < {KR_VOL_AVG_MIN:,}주)"
+            log(f"    탈락 — {reason}")
+            reject_reasons.append(reason)
+            continue
+        if ta['adr'] < KR_ADR_MIN:
+            reason = f"{ticker}: ADR 낮음 ({ta['adr']:.1f}% < {KR_ADR_MIN}%)"
             log(f"    탈락 — {reason}")
             reject_reasons.append(reason)
             continue
@@ -720,7 +743,7 @@ def run_screening_kr(gainers):
         sector   = detail.get('sector') or ''
         industry = detail.get('industry') or ''
         sc       = score_stock(ta, sector, industry)
-        avg_vol  = q['averageDailyVolume3Month'] or 1
+        avg_vol  = ta['avg_vol_20d'] or 1
 
         rev_g_raw  = detail.get('revenueGrowth')
         rev_growth = round(rev_g_raw * 100, 1) if rev_g_raw is not None else None
