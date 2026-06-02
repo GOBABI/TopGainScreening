@@ -217,6 +217,67 @@ def _fetch_gainers_kis():
         _KIS_DIAG["api_msg"] = str(e)[:80]
         return []
 
+def _kis_daily_history(ticker_code, days_needed=280):
+    """KIS 국내주식 일봉 조회 (FHKST03010100) — 200MA/RSI/MACD 계산용 과거 데이터.
+    야후 파이낸스가 국장을 지원하지 않으므로 한국 종목 TA의 기본 데이터 소스.
+    100봉/요청 제한 → 날짜 구간을 뒤로 옮기며 페이지네이션."""
+    import pandas as pd
+    token = _get_kis_token()
+    if not token:
+        return None
+    headers = {
+        "content-type": "application/json; charset=utf-8",
+        "authorization": f"Bearer {token}",
+        "appkey":    KIS_APP_KEY,
+        "appsecret": KIS_APP_SECRET,
+        "tr_id":     "FHKST03010100",
+        "custtype":  "P",
+    }
+    url = f"{KIS_BASE}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+    rows = {}
+    end = datetime.now()
+    for _ in range(6):  # 최대 6회 (~600 거래일)
+        start = end - timedelta(days=140)
+        params = {
+            "fid_cond_mrkt_div_code": "J",
+            "fid_input_iscd":         ticker_code,
+            "fid_input_date_1":       start.strftime("%Y%m%d"),
+            "fid_input_date_2":       end.strftime("%Y%m%d"),
+            "fid_period_div_code":    "D",
+            "fid_org_adj_prc":        "0",
+        }
+        try:
+            r = requests.get(url, headers=headers, params=params, timeout=20)
+            data = r.json()
+            candles = data.get("output2", []) or []
+        except Exception as e:
+            log(f"    KIS 일봉 오류 {ticker_code}: {e}")
+            break
+        if not candles:
+            break
+        oldest = None
+        for cd in candles:
+            d = (cd.get("stck_bsop_date") or "").strip()
+            clpr = _safe_float(cd.get("stck_clpr"))
+            if not d or clpr <= 0:
+                continue
+            rows[d] = {
+                "Close":  clpr,
+                "High":   _safe_float(cd.get("stck_hgpr")),
+                "Low":    _safe_float(cd.get("stck_lwpr")),
+                "Volume": _safe_float(cd.get("acml_vol")),
+            }
+            if oldest is None or d < oldest:
+                oldest = d
+        if len(rows) >= days_needed or oldest is None:
+            break
+        end = datetime.strptime(oldest, "%Y%m%d") - timedelta(days=1)
+    if len(rows) < 50:
+        return None
+    df = pd.DataFrame.from_dict(rows, orient="index")
+    df.index = pd.to_datetime(df.index, format="%Y%m%d")
+    return df.sort_index()
+
 def _check_pykrx():
     global _PYKRX_AVAILABLE
     if _PYKRX_AVAILABLE is None:
@@ -319,15 +380,47 @@ def fetch_gainers_kr():
 
     return [{k: q.get(k) or 0 for k in FIELDS} for q in quotes]
 
+def _kis_index_price(iscd):
+    """KIS 국내 업종 현재지수 (FHPUP02100000). iscd: 0001=KOSPI, 1001=KOSDAQ, 2001=KOSPI200"""
+    token = _get_kis_token()
+    if not token:
+        return None
+    headers = {
+        "content-type": "application/json; charset=utf-8",
+        "authorization": f"Bearer {token}",
+        "appkey":    KIS_APP_KEY,
+        "appsecret": KIS_APP_SECRET,
+        "tr_id":     "FHPUP02100000",
+        "custtype":  "P",
+    }
+    params = {"fid_cond_mrkt_div_code": "U", "fid_input_iscd": iscd}
+    try:
+        r = requests.get(f"{KIS_BASE}/uapi/domestic-stock/v1/quotations/inquire-index-price",
+                         headers=headers, params=params, timeout=15)
+        o = r.json().get("output", {}) or {}
+        price = _safe_float(o.get("bstp_nmix_prpr"))
+        chg   = _safe_float(o.get("bstp_nmix_prdy_ctrt"))
+        if price <= 0:
+            return None
+        return {'price': round(price, 2), 'chg': round(chg, 2), 'week': 0}
+    except Exception as e:
+        log(f"  KIS 지수 오류 {iscd}: {e}")
+        return None
+
 def fetch_market_kr():
-    import yfinance as yf
     out = {}
-    symbols = [
-        ('^KS11', 'kospi'),
-        ('^KQ11', 'kosdaq'),
-        ('^KS200', 'ks200'),
-    ]
-    for sym, key in symbols:
+    # KIS 지수 우선 (야후는 국장 미지원)
+    if KIS_APP_KEY and KIS_APP_SECRET:
+        for iscd, key in [('0001', 'kospi'), ('1001', 'kosdaq'), ('2001', 'ks200')]:
+            d = _kis_index_price(iscd)
+            if d:
+                out[key] = d
+        if out:
+            return out
+
+    # 폴백: yfinance (보통 실패)
+    import yfinance as yf
+    for sym, key in [('^KS11', 'kospi'), ('^KQ11', 'kosdaq'), ('^KS200', 'ks200')]:
         try:
             h = yf.Ticker(sym).history(period='5d')
             if len(h) < 2:
@@ -412,17 +505,38 @@ def qullamaggie_position(price, ma200, high52, ytd):
     else:
         return 'c', '일반 상승 구간'
 
-def analyze(ticker):
-    import yfinance as yf
-    try:
-        h = yf.Ticker(ticker).history(period='2y')
-    except Exception as e:
-        log(f"    history 오류 {ticker}: {e}")
-        return None
-    if len(h) < 50:
+def analyze(ticker, current_price=None):
+    """한국 종목 기술적 분석. 야후 파이낸스가 국장을 지원하지 않으므로
+    KIS 일봉을 1차 소스로 쓰고, KIS 실패 시에만 yfinance 폴백."""
+    import pandas as pd
+    code = ticker.replace('.KS', '').replace('.KQ', '')
+
+    h = None
+    if KIS_APP_KEY and KIS_APP_SECRET:
+        h = _kis_daily_history(code)
+    if h is None or len(h) < 50:
+        # 최후 폴백 — 국장은 보통 실패하지만 안전망으로 유지
+        try:
+            import yfinance as yf
+            h = yf.Ticker(ticker).history(period='2y')
+        except Exception as e:
+            log(f"    history 오류 {ticker}: {e}")
+            return None
+    if h is None or len(h) < 50:
         return None
 
-    c, hi, lo = h['Close'], h['High'], h['Low']
+    # 작업용 복사본 — KIS 실시간가가 마지막 봉과 1%↑ 차이면 오늘 값으로 보정
+    c   = h['Close'].astype(float).copy()
+    hi  = h['High'].astype(float).copy()
+    lo  = h['Low'].astype(float).copy()
+    vol = h['Volume'].astype(float).copy()
+    if current_price and current_price > 0:
+        last = float(c.iloc[-1])
+        if last > 0 and abs(current_price - last) / last > 0.01:
+            c.iloc[-1]  = current_price
+            hi.iloc[-1] = max(current_price, float(hi.iloc[-1]))
+            lo.iloc[-1] = min(current_price, float(lo.iloc[-1]))
+
     ma200  = c.rolling(200).mean()
     ma200v = float(ma200.dropna().iloc[-1]) if len(ma200.dropna()) > 0 else None
     price  = float(c.iloc[-1])
@@ -432,23 +546,23 @@ def analyze(ticker):
     rsi       = calc_rsi(c)
     adx       = calc_adx(hi, lo, c)
     macd_bull = calc_macd_signal(c)
-    high52    = float(c[-252:].max())
+    high52    = float(c.iloc[-252:].max())
     pct52     = round(price / high52 * 100, 1) if high52 > 0 else 0
-    adr       = round(((hi[-20:] / lo[-20:]) - 1).mean() * 100, 1)
+    adr       = round(((hi.iloc[-20:] / lo.iloc[-20:]) - 1).mean() * 100, 1)
 
-    ytd_h = h[h.index >= f"{datetime.now().year}-01-01"]
-    ytd = (round((price - float(ytd_h['Close'].iloc[0])) / float(ytd_h['Close'].iloc[0]) * 100, 1)
-           if len(ytd_h) > 0 else 0)
+    ytd_c = c[c.index >= f"{datetime.now().year}-01-01"]
+    ytd = (round((price - float(ytd_c.iloc[0])) / float(ytd_c.iloc[0]) * 100, 1)
+           if len(ytd_c) > 0 else 0)
 
     ql_pos, ql_desc = qullamaggie_position(price, ma200v, high52, ytd)
 
     vol_trend = 'N/A'
     vol_contraction = False
-    if len(h) >= 20:
-        avg_vol_20 = float(h['Volume'][-20:].mean())
-        avg_vol_5  = float(h['Volume'][-5:].mean())
+    if len(vol) >= 20:
+        avg_vol_20 = float(vol.iloc[-20:].mean())
+        avg_vol_5  = float(vol.iloc[-5:].mean())
         vol_trend  = '증가' if avg_vol_5 > avg_vol_20 * 1.2 else ('감소' if avg_vol_5 < avg_vol_20 * 0.8 else '보합')
-        vols = h['Volume'][-20:].values
+        vols = vol.iloc[-20:].values
         q1 = vols[:5].mean()
         q2 = vols[5:10].mean()
         q3 = vols[10:15].mean()
@@ -456,6 +570,7 @@ def analyze(ticker):
         vol_contraction = bool((q4 < q3 and q3 < q2) or (q4 < q1 * 0.7))
 
     return {
+        'price':           round(price, 0),
         '200ma':           round(ma200v, 2),
         'above_200ma':     bool(price > ma200v),
         'rsi':             round(rsi, 1),
@@ -582,9 +697,9 @@ def run_screening_kr(gainers):
     for q in p1:
         ticker = q['symbol']
         log(f"  분석: {ticker}")
-        ta = analyze(ticker)
+        ta = analyze(ticker, current_price=q.get('regularMarketPrice'))
         if not ta:
-            reason = f"{ticker}: yfinance 데이터 없음"
+            reason = f"{ticker}: 과거 데이터 없음(KIS 일봉/yf 모두 실패)"
             log(f"    탈락 — {reason}")
             reject_reasons.append(reason)
             continue
@@ -777,7 +892,6 @@ def update_watchlist(passed):
     return wl
 
 def refresh_watchlist_ta(wl, today_tickers):
-    import yfinance as yf
     tickers = wl.get('tickers', {})
     stale = [tk for tk in tickers if tk not in today_tickers]
     if not stale:
@@ -788,11 +902,8 @@ def refresh_watchlist_ta(wl, today_tickers):
         if not ta:
             continue
         e = tickers[tk]
-        try:
-            price = float(yf.Ticker(tk).history(period='1d')['Close'].iloc[-1])
-            e['last_price'] = round(price, 0)
-        except Exception:
-            pass
+        if ta.get('price'):
+            e['last_price'] = round(ta['price'], 0)
         sector = e.get('sector', ''); industry = e.get('industry', '')
         e.update({
             'last_rsi': round(ta['rsi'], 1), 'last_adx': round(ta['adx'], 1),
