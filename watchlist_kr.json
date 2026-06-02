@@ -150,7 +150,7 @@
       "last_adx": 43.3,
       "last_macd_bull": false,
       "last_52w_pct": 68.4,
-      "last_ytd": 361.5
+      "last_ytd": 361.2
     },
     "35320K.KS": {
       "first_seen": "2026-05-18",
@@ -166,10 +166,10 @@
       "industry": "Electronic Components",
       "exchange": "KRX",
       "last_rsi": 46.4,
-      "last_adx": 35.3,
+      "last_adx": 34.4,
       "last_macd_bull": false,
       "last_52w_pct": 79.1,
-      "last_ytd": 149.7
+      "last_ytd": 143.1
     },
     "009150.KS": {
       "first_seen": "2026-05-20",
@@ -223,10 +223,10 @@
       "industry": "Electronic Components",
       "exchange": "KRX",
       "last_rsi": 71.7,
-      "last_adx": 68.9,
+      "last_adx": 68.8,
       "last_macd_bull": false,
       "last_52w_pct": 81.8,
-      "last_ytd": 370.8
+      "last_ytd": 368.0
     },
     "092220.KS": {
       "first_seen": "2026-05-22",
