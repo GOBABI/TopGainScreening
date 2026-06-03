@@ -664,6 +664,18 @@ def _check_orb_alerts(sent_flags: dict):
             print(f"[bot] ORB 체크 오류 {sym}: {e}")
 
 
+def run_semi_monitor(chat_id):
+    """/semi — SOXX 반도체 순환매 모니터링 실행 후 결과 전송"""
+    send_message(chat_id, "📡 SOXX 반도체 모니터링 분석 중...")
+    try:
+        from soxx_monitor import run_monitor
+        _, tg_text = run_monitor()
+        send_message(chat_id, tg_text)
+        print("[bot] /semi 완료")
+    except Exception as e:
+        send_message(chat_id, f"❌ SOXX 모니터링 오류: {e}")
+
+
 def run_test(chat_id):
     send_message(chat_id, "🔧 진단 테스트 시작...")
     try:
@@ -1046,6 +1058,9 @@ def main():
             elif text == "/test" or text.startswith("/test@"):
                 print(f"[bot] /test 수신 (chat_id={chat_id})")
                 run_test(chat_id)
+            elif text == "/semi" or text.startswith("/semi@"):
+                print(f"[bot] /semi 수신 (chat_id={chat_id})")
+                run_semi_monitor(chat_id)
             elif text == "/start":
                 send_message(
                     chat_id,
@@ -1055,6 +1070,7 @@ def main():
                     "/force — 장 시간 무관하게 강제 스크리닝\n"
                     "/pre — 미국 프리마켓 갭 상승 종목 스캔\n"
                     "/prekr — 한국 NXT 시간외 / 장중 급상승 종목 스캔\n"
+                    "/semi — SOXX 반도체 순환매/상대강도 모니터링\n"
                     "/test — 서버 연결 및 데이터 진단\n"
                     "/$티커 — 종목 체크리스트 분석 (예: /NVDA)\n"
                     "/종목코드 — 한국 주식 분석 (예: /005930)\n\n"
@@ -1064,7 +1080,7 @@ def main():
                 potential = text[1:].split("@")[0].strip()
                 KNOWN_COMMANDS = {
                     "report", "refresh", "force", "pre", "prekr",
-                    "kr", "test", "start",
+                    "kr", "test", "start", "semi",
                 }
                 if potential.isdigit() and len(potential) == 6:
                     print(f"[bot] /{potential} KR티커 분석 수신 (chat_id={chat_id})")
