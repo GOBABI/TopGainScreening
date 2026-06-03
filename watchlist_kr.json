@@ -2,7 +2,7 @@
   "tickers": {
     "322000.KS": {
       "first_seen": "2026-05-14",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 163100.0,
       "last_change_pct": 15.09,
@@ -21,7 +21,7 @@
     },
     "017900.KS": {
       "first_seen": "2026-05-20",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 2,
       "last_price": 8900.0,
       "last_change_pct": 8.92,
@@ -40,7 +40,7 @@
     },
     "006110.KS": {
       "first_seen": "2026-05-14",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 2,
       "last_price": 79200.0,
       "last_change_pct": 16.0,
@@ -59,7 +59,7 @@
     },
     "010060.KS": {
       "first_seen": "2026-05-14",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 316500.0,
       "last_change_pct": 9.3,
@@ -78,7 +78,7 @@
     },
     "047040.KS": {
       "first_seen": "2026-05-14",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 2,
       "last_price": 22800.0,
       "last_change_pct": 7.13,
@@ -97,7 +97,7 @@
     },
     "006340.KS": {
       "first_seen": "2026-05-14",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 2,
       "last_price": 11110.0,
       "last_change_pct": 6.84,
@@ -116,7 +116,7 @@
     },
     "069640.KS": {
       "first_seen": "2026-05-16",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 1130.0,
       "last_change_pct": 29.98,
@@ -135,7 +135,7 @@
     },
     "000500.KS": {
       "first_seen": "2026-05-18",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 2,
       "last_price": 386000.0,
       "last_change_pct": 9.01,
@@ -154,7 +154,7 @@
     },
     "35320K.KS": {
       "first_seen": "2026-05-18",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 35850.0,
       "last_change_pct": 6.64,
@@ -173,7 +173,7 @@
     },
     "009150.KS": {
       "first_seen": "2026-05-20",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 1813000.0,
       "last_change_pct": 7.5,
@@ -192,7 +192,7 @@
     },
     "006345.KS": {
       "first_seen": "2026-05-21",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 10390.0,
       "last_change_pct": 19.04,
@@ -211,7 +211,7 @@
     },
     "011070.KS": {
       "first_seen": "2026-05-21",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 1252000.0,
       "last_change_pct": 7.89,
@@ -230,7 +230,7 @@
     },
     "092220.KS": {
       "first_seen": "2026-05-22",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 4775.0,
       "last_change_pct": 16.47,
@@ -249,7 +249,7 @@
     },
     "031820.KS": {
       "first_seen": "2026-05-22",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 6240.0,
       "last_change_pct": 5.26,
@@ -268,7 +268,7 @@
     },
     "011930.KS": {
       "first_seen": "2026-05-22",
-      "last_seen": "2026-06-02",
+      "last_seen": "2026-06-03",
       "appearances": 1,
       "last_price": 21750.0,
       "last_change_pct": 9.55,
@@ -287,8 +287,8 @@
     },
     "066570.KS": {
       "first_seen": "2026-06-02",
-      "last_seen": "2026-06-02",
-      "appearances": 1,
+      "last_seen": "2026-06-03",
+      "appearances": 2,
       "last_price": 392500.0,
       "last_change_pct": 3.15,
       "last_score": 5,
