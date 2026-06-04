@@ -85,6 +85,65 @@ def _fetch_data() -> dict:
     return closes
 
 
+def _market_status() -> str:
+    """현재 미국 시장 상태: 'pre' | 'open' | 'after' | 'closed'"""
+    et  = pytz.timezone("America/New_York")
+    now = datetime.now(et)
+    if now.weekday() >= 5:
+        return "closed"
+    hm = now.hour * 100 + now.minute
+    if 400  <= hm < 930:  return "pre"
+    if 930  <= hm < 1600: return "open"
+    if 1600 <= hm < 2000: return "after"
+    return "closed"
+
+
+def _fetch_current_price(sym: str) -> dict:
+    """시장 상태에 맞는 현재가 반환.
+    정규장 → regularMarketPrice,  프리마켓 → preMarketPrice,
+    애프터 → postMarketPrice,     휴장    → 마지막 종가(일봉)
+    """
+    status = _market_status()
+    try:
+        info       = yf.Ticker(sym).info
+        reg_price  = info.get("regularMarketPrice") or 0
+        reg_chg    = info.get("regularMarketChangePercent") or 0
+        prev_close = info.get("regularMarketPreviousClose") or reg_price
+
+        if status == "open":
+            price   = reg_price
+            chg_pct = reg_chg
+            label   = "정규장"
+        elif status == "pre":
+            price = info.get("preMarketPrice") or reg_price
+            raw   = info.get("preMarketChangePercent")
+            chg_pct = raw if raw is not None else (
+                (price / prev_close - 1) * 100 if prev_close else 0)
+            label = "프리마켓"
+        elif status == "after":
+            price = info.get("postMarketPrice") or reg_price
+            raw   = info.get("postMarketChangePercent")
+            chg_pct = raw if raw is not None else (
+                (price / prev_close - 1) * 100 if prev_close else 0)
+            label = "애프터마켓"
+        else:
+            price   = reg_price
+            chg_pct = reg_chg
+            label   = "마지막 종가"
+
+        if not price:
+            return {}
+        return {
+            "price":   float(price),
+            "chg_pct": float(chg_pct),
+            "label":   label,
+            "status":  status,
+        }
+    except Exception as e:
+        print(f"[WARN] {sym} 현재가 조회 실패 — {e}", file=sys.stderr)
+        return {}
+
+
 def _sma(s: pd.Series, n: int) -> pd.Series:
     return s.rolling(n, min_periods=n).mean()
 
@@ -280,7 +339,13 @@ def run_monitor() -> tuple:
     print(f"[soxx] 데이터 수집 중... ({today})")
     closes = _fetch_data()
 
-    soxx_price = float(closes[MAIN].iloc[-1]) if MAIN in closes else None
+    # 일봉 마지막 종가 (지표 계산 기준)
+    soxx_close = float(closes[MAIN].iloc[-1]) if MAIN in closes else None
+    # 시장 상태에 맞는 현재가 (표시용)
+    cur = _fetch_current_price(MAIN)
+    soxx_price  = cur.get("price") or soxx_close
+    soxx_chg    = cur.get("chg_pct")
+    soxx_label  = cur.get("label", "")
 
     rs_ratio   = _calc_rs_ratio(closes)
     mansfield  = _calc_mansfield(closes)
@@ -317,7 +382,14 @@ def run_monitor() -> tuple:
     # ── Telegram HTML ────────────────────────────────────────────────────
     emoji  = SIGNAL_EMOJI[signal]
     label  = SIGNAL_LABEL[signal]
-    price_str = f"${soxx_price:.2f}" if soxx_price else "N/A"
+
+    if soxx_price:
+        chg_str   = f"  {soxx_chg:+.2f}%" if soxx_chg is not None else ""
+        price_str = f"${soxx_price:.2f}{chg_str}  <i>({soxx_label})</i>"
+        price_console = f"${soxx_price:.2f}{('  ' + f'{soxx_chg:+.2f}%') if soxx_chg is not None else ''}  ({soxx_label})"
+    else:
+        price_str     = "N/A"
+        price_console = "N/A"
 
     spy_rs   = rs_ratio.get("SPY",  {})
     mtum_rs  = rs_ratio.get("MTUM", {})
@@ -353,7 +425,7 @@ def run_monitor() -> tuple:
     tg = "\n".join([
         f"{change_hdr}<b>📡 SOXX 반도체 순환매 모니터링</b>",
         f"<i>{today} ET 기준</i>",
-        f"SOXX 현재가: <b>{price_str}</b>",
+        f"SOXX: <b>{price_str}</b>",
         "",
         "<b>① RS 비율선</b>",
         f"  SOXX/SPY:  {spy_rs.get('ratio_now', 0):.4f}  {_rs_tag(spy_rs)}",
@@ -386,7 +458,7 @@ def run_monitor() -> tuple:
         sep,
         f"  SOXX 반도체 모니터링  {today}",
         sep,
-        f"  현재가: {price_str}",
+        f"  SOXX: {price_console}",
         "",
         "  [1] RS 비율선",
         f"    SOXX/SPY:  {spy_rs.get('ratio_now', 0):.4f}  {'⚠ 50MA하향' if spy_rs.get('below_50') else '✓ 50MA위'}",
