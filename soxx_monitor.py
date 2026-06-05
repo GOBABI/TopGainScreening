@@ -29,10 +29,11 @@ CSV_LOG  = os.path.join(BASE_DIR, "signals_log.csv")
 
 # ── 조정 가능 설정 ──────────────────────────────────────────────────────
 CONFIG = {
+    # 기존 파라미터
     "lookback_period":   "2y",   # yfinance 기간 (약 500 거래일)
     "high_window":        60,    # 신고가 판정 거래일
     "trim_window":        10,    # TRIM 이력 조회 거래일
-    "trim_min_days":       5,    # TRIM 판정 최소 음의 다이버전스 일수
+    "trim_min_days":       5,    # TRIM 판정 최소 음의 다이버전스 일수 (기본/순풍)
     "mom_1m":             21,    # 1개월 수익률 거래일
     "mom_3m":             63,    # 3개월 수익률 거래일
     "ma_ratio_short":     20,    # RS 비율선 단기 SMA
@@ -40,6 +41,13 @@ CONFIG = {
     "ma_mansfield_200":  200,    # Mansfield RS 장기 MA
     "ma_mansfield_50":    50,    # Mansfield RS 단기 MA
     "rotate_min_sectors":  2,    # 순환매 판단 최소 아웃퍼폼 섹터 수
+
+    # ── 스타일 로테이션 필터 파라미터 ───────────────────────────────────
+    "style_ma_short":     20,    # SPYG/SPYV 비율의 단기 SMA
+    "style_ma_long":      50,    # SPYG/SPYV 비율의 장기 SMA (역풍 판정 기준)
+    "style_low_window":   20,    # 최근 저점 룩백 거래일 (가치 로테이션 확증용)
+    "trim_min_watch":      3,    # watch(주의) 시 완화된 TRIM 트리거 일수
+    "trim_min_headwind":   2,    # headwind(역풍) 시 더 민감한 TRIM 트리거 일수
 }
 
 MAIN    = "SOXX"
@@ -51,7 +59,8 @@ SECTORS = {
     "XLV": "헬스케어",
     "XLI": "산업재",
 }
-ALL_TICKERS = [MAIN, "SPY", "MTUM"] + list(SECTORS.keys())
+# SPYG(성장), SPYV(가치) 추가
+ALL_TICKERS = [MAIN, "SPY", "MTUM", "SPYG", "SPYV"] + list(SECTORS.keys())
 
 SIGNAL_EMOJI = {
     "EXIT_ALL": "🔴",
@@ -66,6 +75,18 @@ SIGNAL_LABEL = {
     "TRIM":     "절반 익절",
     "ROTATE":   "섹터 교체 검토",
     "HOLD":     "보유 유지",
+}
+STYLE_EMOJI = {
+    "tailwind": "🌤️",
+    "watch":    "⛅",
+    "headwind": "🌧️",
+    "unknown":  "❓",
+}
+STYLE_LABEL = {
+    "tailwind": "순풍",
+    "watch":    "주의",
+    "headwind": "역풍",
+    "unknown":  "데이터없음",
 }
 
 
@@ -247,7 +268,8 @@ def _calc_divergence(closes: dict, rs_ratio: dict) -> dict:
     return {
         "divergence":   bool(today_div),
         "div_count_10": div_days,
-        "trim_flag":    div_days >= CONFIG["trim_min_days"],
+        # trim_flag는 style 조정 전 raw 값 — _decide_signal에서 style_state 반영
+        "div_days_raw": div_days,
     }
 
 
@@ -286,33 +308,164 @@ def _calc_momentum(closes: dict) -> dict:
     }
 
 
-# ── 최종 신호 결정 ───────────────────────────────────────────────────────
-def _decide_signal(mansfield: dict, rs_ratio: dict, divergence: dict, momentum: dict) -> str:
-    """우선순위: EXIT_ALL > REDUCE > TRIM > ROTATE > HOLD"""
-    # EXIT_ALL: Mansfield RS 200 또는 50이 0선 하향 돌파
+# ── 5) 스타일 로테이션 역풍 필터 ────────────────────────────────────────
+def _calc_style_filter(closes: dict) -> dict:
+    """
+    SPYG(성장)/SPYV(가치) 비율로 스타일 로테이션 방향을 감지.
+
+    판정 기준:
+    - headwind(역풍): style_ratio가 50일 SMA 하향이탈 AND 20일 저점도 하향 돌파
+    - watch(주의):   위 두 조건 중 하나만 충족
+    - tailwind(순풍): 두 조건 모두 미충족
+    - unknown:       SPYG 또는 SPYV 데이터 없을 때 (기존 신호는 정상 작동)
+    """
+    spyg = closes.get("SPYG")
+    spyv = closes.get("SPYV")
+    if spyg is None or spyv is None:
+        return {
+            "style_state":         "unknown",
+            "style_ratio":         None,
+            "style_ratio_50ma":    None,
+            "below_50ma":          False,
+            "below_20d_low":       False,
+            "spyg_1m":             None,
+            "spyv_1m":             None,
+            "spyg_minus_spyv_1m":  None,
+        }
+
+    m1 = CONFIG["mom_1m"]
+    idx = spyg.index.intersection(spyv.index)
+    spyg_a = spyg.reindex(idx)
+    spyv_a = spyv.reindex(idx)
+
+    ratio    = spyg_a / spyv_a
+    sma20    = _sma(ratio, CONFIG["style_ma_short"])
+    sma50    = _sma(ratio, CONFIG["style_ma_long"])
+
+    last_ratio = float(ratio.iloc[-1])
+    last_sma50 = float(sma50.dropna().iloc[-1]) if not sma50.dropna().empty else None
+
+    # 조건 ①: 비율이 50일 SMA 하향이탈
+    below_50ma = bool(last_sma50 is not None and last_ratio < last_sma50)
+
+    # 조건 ②: 최근 20일 저점 하향 돌파 (오늘 포함 제외, 직전 20일의 최솟값)
+    lw = CONFIG["style_low_window"]
+    if len(ratio) > lw + 1:
+        recent_low = float(ratio.iloc[-(lw + 1):-1].min())
+        below_20d_low = bool(last_ratio < recent_low)
+    else:
+        below_20d_low = False
+
+    # 판정
+    n_conds = int(below_50ma) + int(below_20d_low)
+    if n_conds == 2:
+        state = "headwind"
+    elif n_conds == 1:
+        state = "watch"
+    else:
+        state = "tailwind"
+
+    # SPYG / SPYV 1M 수익률
+    def _ret1m(s):
+        if s is None or len(s) <= m1:
+            return None
+        return float(s.iloc[-1] / s.iloc[-(m1 + 1)] - 1) * 100
+
+    spyg_1m = _ret1m(spyg)
+    spyv_1m = _ret1m(spyv)
+    diff_1m = round(spyg_1m - spyv_1m, 2) if spyg_1m is not None and spyv_1m is not None else None
+
+    return {
+        "style_state":         state,
+        "style_ratio":         round(last_ratio, 4),
+        "style_ratio_50ma":    round(last_sma50, 4) if last_sma50 else None,
+        "below_50ma":          below_50ma,
+        "below_20d_low":       below_20d_low,
+        "spyg_1m":             round(spyg_1m, 2) if spyg_1m is not None else None,
+        "spyv_1m":             round(spyv_1m, 2) if spyv_1m is not None else None,
+        "spyg_minus_spyv_1m":  diff_1m,
+    }
+
+
+# ── 최종 신호 결정 (스타일 필터 반영) ───────────────────────────────────
+def _decide_signal(
+    mansfield: dict,
+    rs_ratio:  dict,
+    divergence: dict,
+    momentum:  dict,
+    style_state: str = "tailwind",
+) -> tuple:
+    """
+    우선순위: EXIT_ALL > REDUCE > TRIM > ROTATE > HOLD
+
+    style_state에 따라 임계값 조정:
+    - tailwind: 기본값 그대로
+    - watch:    trim_min을 CONFIG["trim_min_watch"]로 완화
+    - headwind: trim_min을 CONFIG["trim_min_headwind"]로 더 완화,
+                REDUCE는 SPY 비율선만 50MA 이탈해도 발동
+    - EXIT_ALL은 style_state와 무관하게 항상 동일
+
+    반환: (signal, adjustments_desc)
+    adjustments_desc: 어떤 임계값이 바뀌었는지 설명 문자열 (없으면 "")
+    """
+    adj = []  # 조정 내역 기록
+
+    # EXIT_ALL: style 무관 — Mansfield RS 200 또는 50이 0선 하향 돌파
     if mansfield.get("mansfield_200_down") or mansfield.get("mansfield_50_down"):
-        return "EXIT_ALL"
-    # REDUCE: 비율선 50일 SMA 하향이탈
-    if rs_ratio.get("SPY", {}).get("below_50") or rs_ratio.get("MTUM", {}).get("below_50"):
-        return "REDUCE"
-    # TRIM: 음의 다이버전스 10일 중 5일 이상
-    if divergence.get("trim_flag"):
-        return "TRIM"
+        return "EXIT_ALL", ""
+
+    # REDUCE: headwind면 SPY 하나만 이탈해도 발동 (기본은 SPY or MTUM)
+    spy_below  = rs_ratio.get("SPY",  {}).get("below_50", False)
+    mtum_below = rs_ratio.get("MTUM", {}).get("below_50", False)
+    if style_state == "headwind":
+        reduce_triggered = spy_below  # SPY 하나로 충분
+        if reduce_triggered and not mtum_below:
+            adj.append("REDUCE: SPY 비율선 단독 이탈로 발동 (headwind 완화)")
+    else:
+        reduce_triggered = spy_below or mtum_below
+    if reduce_triggered:
+        return "REDUCE", "  |  ".join(adj)
+
+    # TRIM: style_state에 따라 trim_min_days 동적 조정
+    div_days = divergence.get("div_days_raw", 0)
+    if style_state == "headwind":
+        trim_threshold = CONFIG["trim_min_headwind"]
+        if trim_threshold != CONFIG["trim_min_days"]:
+            adj.append(f"TRIM 기준 {CONFIG['trim_min_days']}일→{trim_threshold}일 (headwind)")
+    elif style_state == "watch":
+        trim_threshold = CONFIG["trim_min_watch"]
+        if trim_threshold != CONFIG["trim_min_days"]:
+            adj.append(f"TRIM 기준 {CONFIG['trim_min_days']}일→{trim_threshold}일 (watch)")
+    else:
+        trim_threshold = CONFIG["trim_min_days"]
+    if div_days >= trim_threshold:
+        return "TRIM", "  |  ".join(adj)
+
     # ROTATE: 1M 스프레드 음수 + 아웃퍼폼 섹터 2개 이상
     sp = momentum.get("spread_1m_spy") or 0
     if sp < 0 and len(momentum.get("outperform", {})) >= CONFIG["rotate_min_sectors"]:
-        return "ROTATE"
-    return "HOLD"
+        return "ROTATE", "  |  ".join(adj)
+
+    return "HOLD", "  |  ".join(adj)
 
 
 # ── CSV 로그 ─────────────────────────────────────────────────────────────
 def _load_log() -> pd.DataFrame:
-    cols = ["date", "price", "ratio_spy", "ratio_spy_50ma", "mansfield_200",
-            "mansfield_50", "divergence_flag", "spread_1m_spy", "spread_1m_mtum",
-            "top_sector", "final_signal"]
+    cols = [
+        "date", "price", "ratio_spy", "ratio_spy_50ma", "mansfield_200",
+        "mansfield_50", "divergence_flag", "spread_1m_spy", "spread_1m_mtum",
+        "top_sector", "final_signal",
+        # 스타일 필터 컬럼 (기존 뒤에 append)
+        "style_ratio", "style_ratio_50ma", "style_state", "spyg_minus_spyv_1m",
+    ]
     if os.path.exists(CSV_LOG):
         try:
-            return pd.read_csv(CSV_LOG)
+            df = pd.read_csv(CSV_LOG)
+            # 신규 컬럼이 없으면 추가
+            for c in cols:
+                if c not in df.columns:
+                    df[c] = None
+            return df
         except Exception:
             pass
     return pd.DataFrame(columns=cols)
@@ -351,7 +504,12 @@ def run_monitor() -> tuple:
     mansfield  = _calc_mansfield(closes)
     divergence = _calc_divergence(closes, rs_ratio)
     momentum   = _calc_momentum(closes)
-    signal     = _decide_signal(mansfield, rs_ratio, divergence, momentum)
+    style      = _calc_style_filter(closes)          # ← 스타일 필터
+    style_state = style["style_state"]
+
+    signal, adj_desc = _decide_signal(
+        mansfield, rs_ratio, divergence, momentum, style_state
+    )
 
     # 어제 신호 (오늘 이전 마지막 행)
     log_df = _load_log()
@@ -365,17 +523,22 @@ def run_monitor() -> tuple:
                       key=lambda k: momentum["outperform"][k], default=""))
 
     row = {
-        "date":            today,
-        "price":           round(soxx_price, 2) if soxx_price else None,
-        "ratio_spy":       round(rs_ratio.get("SPY",  {}).get("ratio_now", 0), 4),
-        "ratio_spy_50ma":  round(rs_ratio.get("SPY",  {}).get("sma50_now") or 0, 4),
-        "mansfield_200":   round(mansfield.get("mansfield_200", 0), 2),
-        "mansfield_50":    round(mansfield.get("mansfield_50",  0), 2),
-        "divergence_flag": int(divergence.get("divergence", False)),
-        "spread_1m_spy":   round(momentum.get("spread_1m_spy")  or 0, 2),
-        "spread_1m_mtum":  round(momentum.get("spread_1m_mtum") or 0, 2),
-        "top_sector":      top_sector,
-        "final_signal":    signal,
+        "date":               today,
+        "price":              round(soxx_price, 2) if soxx_price else None,
+        "ratio_spy":          round(rs_ratio.get("SPY",  {}).get("ratio_now", 0), 4),
+        "ratio_spy_50ma":     round(rs_ratio.get("SPY",  {}).get("sma50_now") or 0, 4),
+        "mansfield_200":      round(mansfield.get("mansfield_200", 0), 2),
+        "mansfield_50":       round(mansfield.get("mansfield_50",  0), 2),
+        "divergence_flag":    int(divergence.get("divergence", False)),
+        "spread_1m_spy":      round(momentum.get("spread_1m_spy")  or 0, 2),
+        "spread_1m_mtum":     round(momentum.get("spread_1m_mtum") or 0, 2),
+        "top_sector":         top_sector,
+        "final_signal":       signal,
+        # 스타일 필터
+        "style_ratio":        style["style_ratio"],
+        "style_ratio_50ma":   style["style_ratio_50ma"],
+        "style_state":        style_state,
+        "spyg_minus_spyv_1m": style["spyg_minus_spyv_1m"],
     }
     log_df = _save_log(log_df, row)
 
@@ -405,8 +568,7 @@ def run_monitor() -> tuple:
                  else "  🔺 0선 상향돌파" if mansfield.get("mansfield_50_up") else "")
 
     div_flag  = divergence.get("divergence", False)
-    div_count = divergence.get("div_count_10", 0)
-    trim_flag = divergence.get("trim_flag", False)
+    div_days  = divergence.get("div_days_raw", 0)
 
     sp1  = momentum.get("spread_1m_spy")  or 0
     sm1  = momentum.get("spread_1m_mtum") or 0
@@ -419,6 +581,40 @@ def run_monitor() -> tuple:
         tag = " 🔼" if sym in outperform else ""
         sector_lines.append(f"  {sym}({SECTORS[sym]}): {ret:+.1f}%{tag}")
 
+    # 스타일 필터 표시
+    s_emoji = STYLE_EMOJI[style_state]
+    s_label = STYLE_LABEL[style_state]
+    sr      = style["style_ratio"]
+    sr_ma   = style["style_ratio_50ma"]
+    sr_str  = f"{sr:.3f}" if sr is not None else "N/A"
+    sr_ma_str = f"{sr_ma:.3f}" if sr_ma is not None else "N/A"
+    spyg_1m = style.get("spyg_1m")
+    spyv_1m = style.get("spyv_1m")
+    diff_1m = style.get("spyg_minus_spyv_1m")
+
+    style_cond_lines = []
+    if style_state != "unknown":
+        c1 = "✅" if not style["below_50ma"]    else "❌"
+        c2 = "✅" if not style["below_20d_low"] else "❌"
+        style_cond_lines = [
+            f"  {c1} 50MA 위: SPYG/SPYV {sr_str} {'≥' if not style['below_50ma'] else '<'} 50MA {sr_ma_str}",
+            f"  {c2} 20일 저점 위: {'유지' if not style['below_20d_low'] else '하향 이탈'}",
+        ]
+        if spyg_1m is not None and spyv_1m is not None:
+            diff_str = f"{diff_1m:+.1f}%" if diff_1m is not None else ""
+            style_cond_lines.append(
+                f"  SPYG 1M: {spyg_1m:+.1f}%  SPYV 1M: {spyv_1m:+.1f}%  (성장-가치: {diff_str})"
+            )
+
+    # 조정 내역
+    adj_line_tg = (f"\n<i>⚙️ 임계값 조정: {adj_desc}</i>" if adj_desc else "")
+
+    # headwind일 때 HOLD → 추가 경고
+    headwind_warn_tg = (
+        "\n⚠️ <b>스타일 역풍 — 신규 추가 보류</b>"
+        if style_state == "headwind" and signal == "HOLD" else ""
+    )
+
     change_hdr = (f"⚠️ 신호 변경: {prev_signal} → {signal}\n\n"
                   if prev_signal and prev_signal != signal else "")
 
@@ -426,6 +622,9 @@ def run_monitor() -> tuple:
         f"{change_hdr}<b>📡 SOXX 반도체 순환매 모니터링</b>",
         f"<i>{today} ET 기준</i>",
         f"SOXX: <b>{price_str}</b>",
+        "",
+        f"<b>🎨 스타일 필터: {s_emoji} {style_state.upper()} — {s_label}</b>",
+        *style_cond_lines,
         "",
         "<b>① RS 비율선</b>",
         f"  SOXX/SPY:  {spy_rs.get('ratio_now', 0):.4f}  {_rs_tag(spy_rs)}",
@@ -437,7 +636,7 @@ def run_monitor() -> tuple:
         "",
         "<b>③ 신고가 다이버전스 (최근 60일)</b>",
         f"  오늘: {'⚠️ 음의 다이버전스' if div_flag else '✅ 없음'}",
-        f"  10일 중: {div_count}일  {'🔴 TRIM 조건 충족' if trim_flag else ''}",
+        f"  10일 중: {div_days}일",
         "",
         "<b>④ 모멘텀 스프레드</b>",
         f"  1M: vs SPY {sp1:+.1f}%  /  vs MTUM {sm1:+.1f}%",
@@ -447,18 +646,38 @@ def run_monitor() -> tuple:
         *sector_lines,
         "",
         "━━━━━━━━━━━━━━━━━━━━",
-        f"<b>최종 신호: {emoji} {signal} — {label}</b>",
+        f"<b>최종 신호: {emoji} {signal} — {label}</b>{adj_line_tg}{headwind_warn_tg}",
         "━━━━━━━━━━━━━━━━━━━━",
     ])
 
     # ── 콘솔 출력 ────────────────────────────────────────────────────────
     sep = "=" * 52
-    console = "\n".join([
+    headwind_warn_c = (
+        "  ⚠️  스타일 역풍 — 신규 추가 보류"
+        if style_state == "headwind" and signal == "HOLD" else ""
+    )
+    adj_line_c = (f"  ⚙️  임계값 조정: {adj_desc}" if adj_desc else "")
+
+    console_parts = [
         *(["⚠️  신호 변경: " + prev_signal + " → " + signal, ""] if prev_signal and prev_signal != signal else []),
         sep,
         f"  SOXX 반도체 모니터링  {today}",
         sep,
         f"  SOXX: {price_console}",
+        "",
+        f"  스타일: {s_emoji} {style_state.upper()} — {s_label}  |  SPYG/SPYV={sr_str}  (50MA {sr_ma_str})",
+    ]
+    if adj_line_c:
+        console_parts.append(adj_line_c)
+    if style_state != "unknown":
+        cond_txt = (
+            f"  조건: 50MA이탈={'❌' if style['below_50ma'] else '✓'}  "
+            f"20일저점이탈={'❌' if style['below_20d_low'] else '✓'}  "
+            f"SPYG-SPYV 1M={(f'{diff_1m:+.1f}%') if diff_1m is not None else 'N/A'}"
+        )
+        console_parts.append(cond_txt)
+
+    console_parts += [
         "",
         "  [1] RS 비율선",
         f"    SOXX/SPY:  {spy_rs.get('ratio_now', 0):.4f}  {'⚠ 50MA하향' if spy_rs.get('below_50') else '✓ 50MA위'}",
@@ -469,7 +688,7 @@ def run_monitor() -> tuple:
         f"     50일: {m50:+.2f}  {'0선위' if m50 >= 0 else '0선아래'}{m50_sfx}",
         "",
         "  [3] 신고가 다이버전스",
-        f"    오늘: {'음의다이버전스' if div_flag else '없음'}  |  10일중 {div_count}일{' → TRIM' if trim_flag else ''}",
+        f"    오늘: {'음의다이버전스' if div_flag else '없음'}  |  10일중 {div_days}일",
         "",
         "  [4] 모멘텀 스프레드",
         f"    1M: vs SPY {sp1:+.1f}%  vs MTUM {sm1:+.1f}%",
@@ -478,8 +697,11 @@ def run_monitor() -> tuple:
         "",
         sep,
         f"  최종 신호: {emoji} {signal} — {label}",
+        *(["", headwind_warn_c] if headwind_warn_c else []),
         sep,
-    ])
+    ]
+
+    console = "\n".join(console_parts)
     print(console)
 
     return console, tg
