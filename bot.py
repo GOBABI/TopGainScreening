@@ -17,6 +17,7 @@ WATCHLIST_FILE  = os.path.join(BASE_DIR, "watchlist.json")
 PRE_RESULT_FILE = os.path.join(BASE_DIR, "pre_result.json")
 OFFSET_FILE     = os.path.join(BASE_DIR, ".bot_offset")
 PID_FILE        = os.path.join(BASE_DIR, ".bot.pid")
+TOSS_WATCH_FILE = os.path.join(BASE_DIR, "toss_watchlist.json")
 CHAT_ID         = "7371637453"
 
 _screening_running = False
@@ -574,6 +575,7 @@ def _auto_schedule(sent_flags: dict):
         sent_flags["pre"] = today
 
     _check_orb_alerts(sent_flags)
+    _check_toss_watches(sent_flags)
 
 
 _ORB_CHECK_INTERVAL = 300  # seconds (5분 간격)
@@ -674,6 +676,154 @@ def run_semi_monitor(chat_id):
         print("[bot] /semi 완료")
     except Exception as e:
         send_message(chat_id, f"❌ SOXX 모니터링 오류: {e}")
+
+
+# ── 토스 1시간봉 가격 감시 (/watch) ──────────────────────────────────────
+def _load_toss_watches() -> dict:
+    if os.path.exists(TOSS_WATCH_FILE):
+        try:
+            return json.load(open(TOSS_WATCH_FILE))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_toss_watches(watches: dict):
+    with open(TOSS_WATCH_FILE, "w") as f:
+        json.dump(watches, f, indent=2, ensure_ascii=False)
+
+
+def cmd_watch(chat_id, args):
+    """/watch SYMBOL PRICE [QTY] — 1시간봉 종가 ≤ PRICE 이면 알림"""
+    if len(args) < 2:
+        send_message(chat_id, "사용법: /watch 티커 가격 [수량]\n예) /watch SOXX 180 10")
+        return
+    symbol = args[0].upper()
+    try:
+        threshold = float(args[1])
+        qty = float(args[2]) if len(args) >= 3 else 0
+    except ValueError:
+        send_message(chat_id, "가격/수량은 숫자로 입력하세요. 예) /watch SOXX 180 10")
+        return
+
+    watches = _load_toss_watches()
+    watches[symbol] = {
+        "threshold":  threshold,
+        "qty":        qty,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "triggered":  False,
+    }
+    _save_toss_watches(watches)
+    send_message(
+        chat_id,
+        f"👁 감시 등록: <b>{symbol}</b>\n"
+        f"  1시간봉 종가 ≤ {threshold} 이면 알림{f' (수량 {qty})' if qty else ''}\n"
+        f"  매시 정각 직후 확인합니다."
+    )
+
+
+def cmd_unwatch(chat_id, args):
+    """/unwatch SYMBOL — 감시 해제"""
+    if not args:
+        send_message(chat_id, "사용법: /unwatch 티커")
+        return
+    symbol = args[0].upper()
+    watches = _load_toss_watches()
+    if symbol in watches:
+        del watches[symbol]
+        _save_toss_watches(watches)
+        send_message(chat_id, f"🗑 {symbol} 감시 해제됨")
+    else:
+        send_message(chat_id, f"📭 {symbol}은 감시 목록에 없습니다")
+
+
+def cmd_watches(chat_id):
+    """/watches — 현재 감시 목록"""
+    watches = _load_toss_watches()
+    if not watches:
+        send_message(chat_id, "📭 감시 중인 종목이 없습니다. /watch 티커 가격 으로 등록하세요.")
+        return
+    lines = ["<b>👁 토스 감시 목록</b>\n"]
+    for sym, w in watches.items():
+        status = "✅ 트리거됨" if w.get("triggered") else "⏳ 대기 중"
+        qty_str = f"  수량 {w['qty']}" if w.get("qty") else ""
+        lines.append(f"<b>{sym}</b>  1시간봉 ≤ {w['threshold']}{qty_str}  {status}")
+    send_message(chat_id, "\n".join(lines))
+
+
+def cmd_confirmsell(chat_id, args):
+    """/confirmsell SYMBOL — 트리거된 감시에 대해 실제 시장가 매도 실행 (확정 승인)"""
+    if not args:
+        send_message(chat_id, "사용법: /confirmsell 티커")
+        return
+    symbol = args[0].upper()
+    watches = _load_toss_watches()
+    w = watches.get(symbol)
+    if not w or not w.get("triggered"):
+        send_message(chat_id, f"⚠️ {symbol}은 트리거된 감시가 없습니다. 먼저 조건이 충족되어야 합니다.")
+        return
+
+    from toss_client import place_market_sell_order, TOSS_DRY_RUN
+    qty = w.get("qty") or 0
+    if not qty:
+        send_message(chat_id, f"⚠️ {symbol}은 수량(qty)이 설정되지 않았습니다. /watch {symbol} {w['threshold']} 수량 으로 다시 등록하세요.")
+        return
+
+    result = place_market_sell_order(symbol, qty)
+    if result.get("ok"):
+        msg = result.get("message") or f"✅ {symbol} {qty}주 시장가 매도 주문 전송 완료"
+        send_message(chat_id, msg)
+        del watches[symbol]
+        _save_toss_watches(watches)
+    else:
+        send_message(chat_id, f"❌ {symbol} 매도 주문 실패 — {result.get('message')}")
+
+
+_TOSS_CHECK_INTERVAL = 300  # 5분 간격으로 정시 여부 체크
+
+
+def _check_toss_watches(sent_flags: dict):
+    """매시 정각 직후(00~05분) 1시간봉 종가를 확인해 임계값 이하면 알림 전송"""
+    import pytz
+    from datetime import datetime as _dt
+
+    et  = pytz.timezone("America/New_York")
+    now = _dt.now(et)
+    hm  = now.hour * 100 + now.minute
+
+    # 정시 00~05분 사이에만 체크 (시간당 1회)
+    if now.minute > 5:
+        return
+    hour_key = now.strftime("%Y-%m-%d-%H")
+    if sent_flags.get("toss_checked_hour") == hour_key:
+        return
+    sent_flags["toss_checked_hour"] = hour_key
+
+    watches = _load_toss_watches()
+    if not watches:
+        return
+
+    from toss_client import get_last_closed_hourly_close
+    changed = False
+    for symbol, w in watches.items():
+        if w.get("triggered"):
+            continue
+        candle = get_last_closed_hourly_close(symbol)
+        close = candle.get("close")
+        if close is None:
+            continue
+        if close <= w["threshold"]:
+            w["triggered"] = True
+            changed = True
+            qty_hint = f" /confirmsell {symbol} 입력 시 {w['qty']}주 시장가 매도" if w.get("qty") else " (수량 미설정 — /watch로 재등록 필요)"
+            send_message(CHAT_ID, (
+                f"⚠️ <b>{symbol} 1시간봉 종가 조건 충족</b>\n"
+                f"  현재 종가 ${close:.2f}  ≤  임계값 ${w['threshold']:.2f}\n"
+                f"  매도하시려면{qty_hint}"
+            ))
+            print(f"[bot] toss watch 트리거: {symbol} @ {close}")
+    if changed:
+        _save_toss_watches(watches)
 
 
 def run_test(chat_id):
@@ -1061,6 +1211,18 @@ def main():
             elif text == "/semi" or text.startswith("/semi@"):
                 print(f"[bot] /semi 수신 (chat_id={chat_id})")
                 run_semi_monitor(chat_id)
+            elif text.split()[0].split("@")[0] == "/watch":
+                print(f"[bot] /watch 수신 (chat_id={chat_id})")
+                cmd_watch(chat_id, text.split()[1:])
+            elif text.split()[0].split("@")[0] == "/unwatch":
+                print(f"[bot] /unwatch 수신 (chat_id={chat_id})")
+                cmd_unwatch(chat_id, text.split()[1:])
+            elif text.split()[0].split("@")[0] == "/watches":
+                print(f"[bot] /watches 수신 (chat_id={chat_id})")
+                cmd_watches(chat_id)
+            elif text.split()[0].split("@")[0] == "/confirmsell":
+                print(f"[bot] /confirmsell 수신 (chat_id={chat_id})")
+                cmd_confirmsell(chat_id, text.split()[1:])
             elif text == "/start":
                 send_message(
                     chat_id,
@@ -1071,16 +1233,21 @@ def main():
                     "/pre — 미국 프리마켓 갭 상승 종목 스캔\n"
                     "/prekr — 한국 NXT 시간외 / 장중 급상승 종목 스캔\n"
                     "/semi — SOXX 반도체 순환매/상대강도 모니터링\n"
+                    "/watch 티커 가격 [수량] — 1시간봉 종가 ≤가격 알림 등록\n"
+                    "/unwatch 티커 — 감시 해제\n"
+                    "/watches — 감시 목록 보기\n"
+                    "/confirmsell 티커 — 트리거된 종목 시장가 매도 승인\n"
                     "/test — 서버 연결 및 데이터 진단\n"
                     "/$티커 — 종목 체크리스트 분석 (예: /NVDA)\n"
                     "/종목코드 — 한국 주식 분석 (예: /005930)\n\n"
                     "📅 자동 전송: 장 마감 후 report / 개장 30분 전 pre"
                 )
             elif text.startswith("/") and len(text) > 1:
-                potential = text[1:].split("@")[0].strip()
+                potential = text[1:].split("@")[0].split()[0].strip()
                 KNOWN_COMMANDS = {
                     "report", "refresh", "force", "pre", "prekr",
                     "kr", "test", "start", "semi",
+                    "watch", "unwatch", "watches", "confirmsell",
                 }
                 if potential.isdigit() and len(potential) == 6:
                     print(f"[bot] /{potential} KR티커 분석 수신 (chat_id={chat_id})")
