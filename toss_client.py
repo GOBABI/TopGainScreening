@@ -1,7 +1,7 @@
 """
 토스증권 Open API 클라이언트
 
-인증 정보는 Railway Variables(환경변수)에서 읽음:
+인증 정보는 환경변수에서 읽음 (호스팅 플랫폼의 환경변수 설정에 등록):
   TOSS_CLIENT_ID      - 토스증권 WTS > 설정 > Open API에서 발급
   TOSS_CLIENT_SECRET  - 위와 동일 화면에서 발급
   TOSS_ACCOUNT_ID     - 주문 시 필요한 계좌 식별자 (X-Tossinvest-Account 헤더)
@@ -43,7 +43,7 @@ def _get_token() -> str:
 
     if not TOSS_CLIENT_ID or not TOSS_CLIENT_SECRET:
         _DIAG["token_ok"] = False
-        _DIAG["token_msg"] = "TOSS_CLIENT_ID / TOSS_CLIENT_SECRET 미설정 (Railway Variables 확인)"
+        _DIAG["token_msg"] = "TOSS_CLIENT_ID / TOSS_CLIENT_SECRET 미설정 (환경변수 확인)"
         return ""
 
     try:
@@ -145,7 +145,7 @@ def place_market_sell_order(symbol: str, qty: float, dry_run: bool = None) -> di
         }
 
     if not TOSS_ACCOUNT_ID:
-        return {"ok": False, "message": "TOSS_ACCOUNT_ID 미설정 — Railway Variables 확인"}
+        return {"ok": False, "message": "TOSS_ACCOUNT_ID 미설정 — 환경변수 확인"}
 
     try:
         r = requests.post(

@@ -89,7 +89,7 @@ def _get_kis_token():
         _KIS_DIAG["token_ok"] = True
         return cache["token"]
     if not KIS_APP_KEY or not KIS_APP_SECRET:
-        log("KIS API 키 미설정 — Railway Variables에 KIS_APP_KEY / KIS_APP_SECRET 추가 필요")
+        log("KIS API 키 미설정 — 환경변수에 KIS_APP_KEY / KIS_APP_SECRET 추가 필요")
         _KIS_DIAG["token_ok"] = False
         _KIS_DIAG["token_msg"] = "키 미설정"
         return ""
