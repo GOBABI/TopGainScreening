@@ -3,6 +3,8 @@
 bot.py /refresh 명령어에서 호출
 """
 import os, json, sys
+from env_loader import load_env
+load_env()
 from html_report import build_html, send_telegram_html
 
 BASE_DIR       = os.path.dirname(os.path.abspath(__file__))

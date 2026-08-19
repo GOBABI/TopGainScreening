@@ -14,3 +14,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .claude/settings.local.json
+
+# 로컬 환경변수 (BOT_TOKEN, GITHUB_TOKEN, TOSS_* 등 — 절대 커밋 금지)
+.env
