@@ -10,6 +10,9 @@ import sys
 import subprocess
 import requests
 
+from env_loader import load_env
+load_env()
+
 BOT_TOKEN       = os.environ.get("BOT_TOKEN", "")
 BASE_URL        = f"https://api.telegram.org/bot{BOT_TOKEN}"
 BASE_DIR        = os.path.dirname(os.path.abspath(__file__))

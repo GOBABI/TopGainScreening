@@ -6,6 +6,8 @@ KR Market Top Gainers Screening
 """
 
 import sys, os, json, warnings, requests
+from env_loader import load_env
+load_env()
 from html_report import build_html, send_telegram_html
 from datetime import datetime, timedelta
 warnings.filterwarnings('ignore')
